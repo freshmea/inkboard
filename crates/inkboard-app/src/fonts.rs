@@ -32,7 +32,9 @@ pub fn save_embedded_pref(on: bool) {
 /// the previous fonts stay in use for both measuring and painting, so a frame never mixes the two sets.
 pub fn apply(ctx: &egui::Context, embedded: bool) {
     if embedded || ALWAYS_EMBEDDED {
-        ctx.set_fonts(inkboard_fonts::definitions());
+        let mut defs = inkboard_fonts::definitions();
+        add_korean_fallback(&mut defs);
+        ctx.set_fonts(defs);
     } else {
         install(ctx);
     }
@@ -49,6 +51,18 @@ fn read_system_font(file: &str) -> Option<Vec<u8>> {
     }
     let dirs: [&str; 3] = ["C:\\Windows\\Fonts", "/usr/share/fonts/truetype/dejavu", "/System/Library/Fonts/Supplemental"];
     dirs.iter().find_map(|d| std::fs::read(std::path::Path::new(d).join(file)).ok())
+}
+
+/// Native Windows fallback for characters absent from the Latin-only bundled fonts.
+/// Load from the OS; do not redistribute Microsoft's font files.
+fn add_korean_fallback(defs: &mut FontDefinitions) {
+    if let Some(bytes) = read_system_font("malgun.ttf") {
+        let key = "korean-fallback";
+        defs.font_data.insert(key.to_owned(), Arc::new(FontData::from_owned(bytes)));
+        for chain in defs.families.values_mut() {
+            chain.push(key.to_owned());
+        }
+    }
 }
 
 /// Installs the board's fonts (Segoe UI, Segoe Print, Georgia, Consolas when they exist).
@@ -86,6 +100,7 @@ pub fn install(ctx: &egui::Context) {
     if has_sans {
         defs.families.entry(EFamily::Proportional).or_default().insert(0, "segoeui".to_owned());
     }
+    add_korean_fallback(&mut defs);
     ctx.set_fonts(defs);
 }
 
@@ -131,6 +146,27 @@ mod tests {
         apply(&ctx, embedded);
         let _ = ctx.run(egui::RawInput::default(), |_| {});
         ctx
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn korean_glyphs_exist_in_every_board_style() {
+        if std::env::var_os("INKBOARD_NO_SYSTEM_FONTS").is_some() {
+            return;
+        }
+        assert!(read_system_font("malgun.ttf").is_some(), "Windows Korean font required");
+        for embedded in [false, true] {
+            let ctx = context(embedded);
+            for family in FAMILIES {
+                for bold in [false, true] {
+                    ctx.fonts_mut(|fonts| {
+                        for ch in "한글복사붙여넣기대한민국ㄱㅏ힣".chars() {
+                            assert!(fonts.has_glyph(&font_id(family, 24.0, bold), ch), "missing {ch}: {family:?}");
+                        }
+                    });
+                }
+            }
+        }
     }
 
     fn rich(bold: bool) -> RichText {

@@ -18,7 +18,7 @@ impl App {
             b.frame.x = at.x - b.frame.w / 2.0;
             b.frame.y = at.y - b.frame.h / 2.0;
         }
-        let id = self.ed.insert(o);
+        let id = self.ed.insert_on_canvas(o);
         self.sel = vec![id];
         self.tool = Tool::Select;
     }
@@ -73,7 +73,7 @@ impl App {
         let aid = self.ed.doc.add_asset("image/svg+xml", svg.into_bytes());
         let frame = Frame::new(at.x - w * k / 2.0, at.y - h * k / 2.0, w * k, h * k);
         let mono = lib.sets[r.set].mono;
-        let id = self.ed.insert(Object::new(
+        let id = self.ed.insert_on_canvas(Object::new(
             Kind::Image(ImageObj { frame, asset: aid, latex: None, mono, recolor: Vec::new() }),
             Style { width: 0.0, fill: None, ..Style::default() },
         ));
@@ -106,7 +106,7 @@ impl App {
         let at = self.view_center();
         let frame = Frame::new(at.x - f.w / 2.0, at.y - f.h / 2.0, f.w, f.h);
         let style = Style { stroke: self.style.stroke, width: 0.0, fill: None, ..Style::default() };
-        let id = self.ed.insert(Object::new(Kind::Image(ImageObj { frame, asset: aid, latex: Some(src), mono: false, recolor: Vec::new() }), style));
+        let id = self.ed.insert_on_canvas(Object::new(Kind::Image(ImageObj { frame, asset: aid, latex: Some(src), mono: false, recolor: Vec::new() }), style));
         self.sel = vec![id];
         self.tool = Tool::Select;
         Ok(())
@@ -124,7 +124,7 @@ impl App {
         let style = Style { stroke: Color::rgb(0xff, 0xff, 0xff), fill: Some(Color::rgb(0xe0, 0x31, 0x31)), width: 0.0, ..Style::default() };
         let label = Label { text: RichText::plain("1"), family: FontFamily::Sans, size: 16.0, align: Align::Center, valign: inkboard_core::VAlign::Middle };
         let o = Object::new_box(BoxGeom::Ellipse, Frame::new(at.x - 14.0, at.y - 14.0, 28.0, 28.0), style, label);
-        let id = self.ed.insert(o);
+        let id = self.ed.insert_on_canvas(o);
         self.sel = vec![id];
     }
 }

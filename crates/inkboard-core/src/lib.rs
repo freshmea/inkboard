@@ -42,6 +42,7 @@
 pub mod connector;
 pub mod editor;
 pub mod geom;
+pub mod hierarchy;
 pub mod highlight;
 pub mod history;
 pub mod hit;

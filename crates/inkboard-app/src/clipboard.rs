@@ -68,6 +68,18 @@ fn parse_tsv(text: &str) -> Option<Vec<Vec<String>>> {
 }
 
 impl App {
+    /// A selected destination frame is an explicit paste target; otherwise keep view-center placement.
+    pub(crate) fn selected_paste_frame_center(&self) -> Option<Pt> {
+        let roots = self.ed.page().hierarchy_roots(&self.sel);
+        let [id] = roots.as_slice() else { return None };
+        let object = self.ed.page().get(id)?;
+        (object.is_frame && !self.ed.page().is_locked(object) && self.ed.page().is_visible(object)).then(|| object.frame().map(|f| f.center())).flatten()
+    }
+
+    pub(crate) fn paste_position(&self) -> Pt {
+        self.selected_paste_frame_center().unwrap_or_else(|| self.view_center())
+    }
+
     /// Copies the selection (internally) and leaves a marker in the system clipboard.
     pub fn copy_to_system(&mut self, ctx: &eframe::egui::Context) {
         self.copy_selection();
@@ -86,7 +98,7 @@ impl App {
             return self.paste_text(text);
         }
         if let Some((w, h, rgba)) = (self.system_image)() {
-            let at = self.view_center();
+            let at = self.paste_position();
             return self.insert_rgba(w, h, &rgba, at);
         }
         self.paste();
@@ -99,7 +111,7 @@ impl App {
     }
 
     pub fn paste_text(&mut self, text: &str) {
-        let at = self.view_center();
+        let at = self.paste_position();
         if let Some(grid) = parse_tsv(text) {
             return self.paste_table(grid, at);
         }
@@ -116,7 +128,7 @@ impl App {
             b.frame.x = at.x - b.frame.w / 2.0;
             b.frame.y = at.y - b.frame.h / 2.0;
         }
-        let id = self.ed.insert(o);
+        let id = self.ed.insert_on_canvas(o);
         self.sel = vec![id];
         self.tool = Tool::Select;
     }
@@ -149,7 +161,7 @@ impl App {
         }
         let (w, h) = (tb.col_w.iter().sum::<f64>(), tb.row_h.iter().sum::<f64>());
         tb.origin = Pt::new(at.x - w / 2.0, at.y - h / 2.0);
-        let id = self.ed.insert(Object::new(Kind::Table(tb), Style { width: 2.0, fill: None, ..self.style.clone() }));
+        let id = self.ed.insert_on_canvas(Object::new(Kind::Table(tb), Style { width: 2.0, fill: None, ..self.style.clone() }));
         self.sel = vec![id];
         self.tool = Tool::Select;
         // a table larger than the view is framed, so that it does not spill off the screen
@@ -176,7 +188,7 @@ impl App {
         let (fw, fh) = (num::f64_of(w), num::f64_of(h));
         let k = (480.0 / fw).min(360.0 / fh).min(1.0);
         let frame = Frame::new(at.x - fw * k / 2.0, at.y - fh * k / 2.0, fw * k, fh * k);
-        let id = self.ed.insert(Object::new(
+        let id = self.ed.insert_on_canvas(Object::new(
             Kind::Image(ImageObj { frame, asset: aid, latex: None, mono: false, recolor: Vec::new() }),
             Style { width: 0.0, fill: None, ..Style::default() },
         ));

@@ -906,7 +906,7 @@ fn in_french_in_a_1024_by_700_window_the_toolbar_and_the_menu_fit_without_overla
     let screen = egui::Rect::from_min_size(Pos2::ZERO, vec2(1024.0, 700.0));
 
     // the floating cards: inside the window and not on top of each other
-    let names = ["title", "tools", "pages", "zoom", "help"];
+    let names = ["title", "tools", "pages", "zoom", "help", "inspector"];
     let cards: Vec<egui::Rect> = names.iter().map(|n| card(&t, n)).collect();
     for (n, r) in names.iter().zip(&cards) {
         assert!(screen.expand(0.5).contains_rect(*r), "card {n} leaves the window: {r:?}");

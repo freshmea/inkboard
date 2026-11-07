@@ -47,6 +47,7 @@ mod i18n;
 mod i18n_fr;
 mod icons;
 mod insert;
+mod inspector;
 mod join_ui;
 mod keymap;
 mod library;

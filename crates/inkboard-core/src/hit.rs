@@ -66,6 +66,12 @@ impl Page {
                 let (width, height) = (b.frame.w, b.frame.h);
                 let l = b.frame.to_local(p);
                 let (hw, hh) = (width / 2.0, height / 2.0);
+                if o.is_frame {
+                    let inside = l.x.abs() <= hw + reach && l.y.abs() <= hh + reach;
+                    let border = l.x.abs() >= hw - reach || l.y.abs() >= hh - reach;
+                    let title = !b.label.text.is_empty() && l.y + hh <= b.label.size * 1.5 + 12.0;
+                    return inside && (border || title);
+                }
                 match b.geom {
                     BoxGeom::Text | BoxGeom::Sticky => l.x.abs() <= hw + tol && l.y.abs() <= hh + tol,
                     geom => {
@@ -99,10 +105,27 @@ impl Page {
             let o = &self.objects[i];
             self.is_visible(o) && self.layer(&o.layer).is_none_or(|l| !l.locked) && self.hit_with(o, p, tol, get)
         };
-        match candidates {
+        let hit = match candidates {
             Some(c) => c.iter().rev().copied().find(|&i| ok(i)),
             None => (0..self.objects.len()).rev().find(|&i| ok(i)),
-        }
+        };
+        hit.or_else(|| {
+            // Container backgrounds must not obscure another frame's border or a child object.
+            let background = |i: usize| {
+                let o = &self.objects[i];
+                o.is_frame
+                    && self.is_visible(o)
+                    && self.layer(&o.layer).is_none_or(|l| !l.locked)
+                    && o.frame().is_some_and(|f| {
+                        let local = f.to_local(p);
+                        local.x.abs() <= f.w / 2.0 && local.y.abs() <= f.h / 2.0
+                    })
+            };
+            match candidates {
+                Some(c) => c.iter().rev().copied().find(|&i| background(i)),
+                None => (0..self.objects.len()).rev().find(|&i| background(i)),
+            }
+        })
     }
 
     /// Object a connector can attach to under `p` (inside or edge, fill irrelevant).

@@ -181,7 +181,7 @@ fn object(s: &Spec, id: Id, attach: &[Id], doc: &mut Document) -> Object {
         }
     };
     let layer = Id::from(if s.layer2 { "l2" } else { "main" });
-    Object { id, kind, style, group: s.group.map(|g| Id(format!("g{g}"))), locked: s.locked, layer }
+    Object { id, kind, style, group: s.group.map(|g| Id(format!("g{g}"))), locked: s.locked, layer, is_frame: false, parent: None }
 }
 
 /// Deterministic ids (`p<page>`, `o<index>`), so a failing case is reproducible from the printed spec.

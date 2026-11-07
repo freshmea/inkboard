@@ -15,7 +15,7 @@ const LEGACY_FORMAT: &str = "tableau-blanc";
 pub fn is_native_format(format: &str) -> bool {
     format == FORMAT || format == LEGACY_FORMAT
 }
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 
 /// Extension given to new native files (`board.inkboard`).
 pub const NATIVE_EXT: &str = "inkboard";
@@ -61,7 +61,8 @@ struct EnvelopeIn {
 /// Never in practice: every type of the document serializes (string map keys, no fallible `Serialize`).
 #[must_use]
 pub fn to_json(doc: &Document, pretty: bool) -> String {
-    let env = EnvelopeOut { format: FORMAT, version: VERSION, document: doc };
+    let hierarchy = doc.pages.iter().flat_map(|p| &p.objects).any(|o| o.is_frame || o.parent.is_some());
+    let env = EnvelopeOut { format: FORMAT, version: if hierarchy { VERSION } else { 2 }, document: doc };
     let r = if pretty { serde_json::to_string_pretty(&env) } else { serde_json::to_string(&env) };
     r.expect("serializing a document cannot fail")
 }
@@ -109,6 +110,7 @@ pub fn sanitize(doc: &mut Document) {
                 o.layer = main.clone();
             }
         }
+        page.sanitize_hierarchy();
         let ids: HashSet<Id> = page.objects.iter().map(|o| o.id.clone()).collect();
         page.objects.retain(|o| match &o.kind {
             Kind::Connector(c) => c.targets().all(|t| ids.contains(t)),

@@ -139,6 +139,7 @@ pub struct App {
     pub ui_dark: bool,
     /// The style panel shows the layer list.
     pub layers_open: bool,
+    pub inspector: crate::inspector::Inspector,
     /// Interface language choice (system language, or forced).
     pub lang_pref: crate::i18n::Pref,
     /// Setting "Use built-in fonts" (the embedded set is also used during any shared session) and the set currently installed.
@@ -220,6 +221,7 @@ impl App {
     }
 
     /// `restore`: reloads the last autosave (disabled in tests).
+    #[allow(clippy::too_many_lines, reason = "application state is initialized in one place")]
     pub fn build(cc: &eframe::CreationContext<'_>, open: Option<PathBuf>, screenshot: Option<PathBuf>, restore: bool) -> Self {
         // like the language, the font setting is read only for the real application (tests use the system set)
         let fonts_pref = restore && fonts::load_embedded_pref();
@@ -256,6 +258,7 @@ impl App {
             keymap_path: None,
             ui_dark: false,
             layers_open: false,
+            inspector: crate::inspector::Inspector::default(),
             lang_pref,
             fonts_pref,
             fonts_embedded,
@@ -735,7 +738,8 @@ impl App {
 
     pub fn copy_selection(&mut self) {
         let page = self.ed.page();
-        self.clipboard = page.objects.iter().filter(|o| self.sel.contains(&o.id)).cloned().collect();
+        let ids = page.expand_frames(&self.sel);
+        self.clipboard = page.objects.iter().filter(|o| ids.contains(&o.id)).cloned().collect();
         self.clipboard_assets = self
             .clipboard
             .iter()
@@ -753,14 +757,22 @@ impl App {
         let mut page = Page::new("clip");
         page.objects.clone_from(&self.clipboard);
         let ids: Vec<Id> = page.objects.iter().map(|o| o.id.clone()).collect();
-        let copies = Editor::clone_objects(&page, &ids, Pt::new(d, d));
+        let destination = self.selected_paste_frame_center().filter(|_| !self.sel.iter().any(|id| ids.contains(id)));
+        let offset = destination.zip(page.bounds_of(&ids)).map_or(Pt::new(d, d), |(at, bounds)| at - bounds.center());
+        let copies = Editor::clone_objects(&page, &ids, offset);
         for (id, a) in &self.clipboard_assets {
             self.ed.doc.assets.entry(id.clone()).or_insert_with(|| a.clone());
         }
-        self.sel = self.ed.insert_all(copies);
+        self.sel = self.ed.insert_all_on_canvas(copies);
     }
 
     pub fn delete_selection(&mut self) {
+        let expanded = self.ed.page().expand_frames(&self.sel);
+        if expanded.iter().any(|id| self.ed.page().get(id).is_some_and(|o| o.is_frame))
+            && expanded.iter().any(|id| self.ed.page().get(id).is_some_and(|o| self.ed.page().is_locked(o)))
+        {
+            return;
+        }
         let ids: Vec<Id> = self.sel.iter().filter(|i| self.ed.page().get(i).is_some_and(|o| !self.ed.page().is_locked(o))).cloned().collect();
         if !ids.is_empty() {
             self.ed.remove(&ids);
@@ -805,13 +817,22 @@ impl App {
     }
 
     pub fn fit_view(&mut self, only_selection: bool) {
+        self.fit_view_with_inspector(only_selection, self.inspector.open);
+    }
+
+    pub(crate) fn fit_view_with_inspector(&mut self, only_selection: bool, inspector_open: bool) {
         let page = self.ed.page();
         let b = if only_selection && !self.sel.is_empty() { page.bounds_of(&self.sel) } else { page.content_bounds() };
         let (w, h) = (f64::from(self.canvas_size.0.max(100.0)), f64::from(self.canvas_size.1.max(100.0)));
+        let left = if inspector_open && crate::panel::visible(self) { 300.0 } else { 0.0 };
+        let right = if inspector_open { 330.0 } else { 0.0 };
+        let available_width = (w - left - right).max(120.0);
+        let center_x = left + available_width / 2.0;
+        let fit_width = if inspector_open { (available_width - 60.0).max(40.0) } else { w - 140.0 };
         let view = match b {
             Some(b) => {
-                let z = ((w - 140.0) / b.w.max(1.0)).min((h - 140.0) / b.h.max(1.0)).clamp(0.05, 2.0);
-                View { x: w / 2.0 - b.center().x * z, y: h / 2.0 - b.center().y * z, zoom: z }
+                let z = (fit_width / b.w.max(1.0)).min((h - 140.0) / b.h.max(1.0)).clamp(0.05, 2.0);
+                View { x: center_x - b.center().x * z, y: h / 2.0 - b.center().y * z, zoom: z }
             }
             None => View { x: w / 2.0, y: h / 2.0, zoom: 1.0 },
         };
@@ -937,7 +958,7 @@ impl App {
                 Incoming::PastedImage((w, h, rgba)) => {
                     // the key release that follows must not paste the board's own clipboard as well
                     self.last_paste_at = Some(Instant::now());
-                    let at = self.view_center();
+                    let at = self.paste_position();
                     self.insert_rgba(w, h, &rgba, at);
                 }
             }
@@ -994,7 +1015,10 @@ impl App {
                         _ => Pt::new(0.0, step),
                     };
                     let sel: Vec<Id> = self.sel.iter().filter(|i| self.ed.page().get(i).is_some_and(|o| !self.ed.page().is_locked(o))).cloned().collect();
-                    self.ed.translate(&sel, d);
+                    self.ed.transact(|e| {
+                        e.translate(&sel, d);
+                        e.adopt_frames_at_position(&sel);
+                    });
                 }
                 _ => {}
             }
@@ -1034,7 +1058,8 @@ impl App {
             Action::ZoomIn => self.zoom_by(1.25),
             Action::ZoomOut => self.zoom_by(0.8),
             Action::EditText => {
-                if let [id] = sel.as_slice() {
+                let roots = self.ed.page().hierarchy_roots(&sel);
+                if let [id] = roots.as_slice() {
                     self.start_editing(id, None);
                 }
             }
@@ -1191,6 +1216,9 @@ impl App {
                     self.sel = vec![id];
                 }
             }
+            if demo.contains("inspector") {
+                self.fit_view_with_inspector(true, true);
+            }
         }
         if self.ui_demo.contains("menu")
             && self.frames == 6
@@ -1307,6 +1335,7 @@ impl eframe::App for App {
             ui::present_overlay(self, ctx);
         } else {
             crate::chrome::show(self, ctx);
+            crate::inspector::show(self, ctx);
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| crate::tools::canvas(self, ui));
         ui::dialogs(self, ctx);

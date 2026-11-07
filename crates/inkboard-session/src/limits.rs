@@ -240,6 +240,15 @@ pub fn check_object(l: &Limits, o: &Object) -> Result<(), Violation> {
     if let Some(g) = &o.group {
         check_id(l, g)?;
     }
+    if let Some(parent) = &o.parent {
+        check_id(l, parent)?;
+        if parent == &o.id {
+            return Err(Violation::Malformed("object is its own parent"));
+        }
+    }
+    if o.is_frame && !matches!(&o.kind, Kind::Box(b) if b.geom == inkboard_core::BoxGeom::Rect) {
+        return Err(Violation::Malformed("frame must be a rectangle"));
+    }
     match &o.kind {
         Kind::Box(b) => {
             check_frame(l, &b.frame)?;

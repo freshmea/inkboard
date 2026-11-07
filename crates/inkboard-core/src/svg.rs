@@ -529,14 +529,21 @@ fn image_frames(inner: &str) -> std::borrow::Cow<'_, str> {
 }
 
 /// Exports a page (or only `ids`) to SVG. `None` when there is nothing to export.
-pub fn export(doc: &Document, page: &Page, ids: Option<&[Id]>, m: &dyn Measurer, opts: &SvgOptions) -> Option<String> {
+#[must_use]
+pub fn export_bounds(page: &Page, ids: Option<&[Id]>, opts: &SvgOptions) -> Option<Rect> {
     let objs: Vec<&Object> = page.objects.iter().filter(|o| page.is_visible(o) && ids.is_none_or(|ids| ids.contains(&o.id))).collect();
     let mut bounds = objs.iter().map(|o| page.bounds(o)).reduce(|a, b| a.union(&b))?;
     let shadows = objs.iter().any(|o| casts_shadow(o));
     if shadows || objs.iter().any(|o| matches!(&o.kind, Kind::Box(b) if b.geom == BoxGeom::Sticky)) {
         bounds = bounds.expand(10.0);
     }
-    let b = bounds.expand(opts.padding);
+    Some(bounds.expand(opts.padding))
+}
+
+/// Exports a page or selection, using the same bounds as the inspector's PNG size preview.
+pub fn export(doc: &Document, page: &Page, ids: Option<&[Id]>, m: &dyn Measurer, opts: &SvgOptions) -> Option<String> {
+    let objs: Vec<&Object> = page.objects.iter().filter(|o| page.is_visible(o) && ids.is_none_or(|ids| ids.contains(&o.id))).collect();
+    let b = export_bounds(page, ids, opts)?;
     let ctx = Ctx { dark: doc.background.preset.is_dark(), doc, page, m, shadows: std::cell::Cell::new(0) };
     let mut s = String::new();
     let _ = write!(

@@ -157,6 +157,9 @@ impl App {
 
     pub fn editable_selection(&self) -> Vec<Object> {
         let p = self.ed.page();
+        if p.objects.iter().any(|o| self.sel.contains(&o.id) && o.is_frame) && p.objects.iter().any(|o| self.sel.contains(&o.id) && p.is_locked(o)) {
+            return Vec::new();
+        }
         p.objects.iter().filter(|o| self.sel.contains(&o.id) && !p.is_locked(o)).cloned().collect()
     }
 
@@ -288,7 +291,9 @@ impl App {
                 }
                 return;
             }
-            let was = self.sel.contains(&o.id);
+            let roots = self.ed.page().hierarchy_roots(&self.sel);
+            let selected_through_frame = !roots.contains(&o.id) && roots.iter().any(|id| self.ed.page().get(id).is_some_and(|root| root.is_frame));
+            let was = self.sel.contains(&o.id) && !selected_through_frame;
             if !was {
                 self.select_with_groups(std::slice::from_ref(&o.id));
             }
@@ -578,6 +583,9 @@ impl App {
             Drag::Move { orig, moved, collapse_to, start } => {
                 let _ = start;
                 if moved {
+                    let ids: Vec<Id> = orig.iter().map(|o| o.id.clone()).collect();
+                    let changes = self.ed.page().automatic_parent_changes(&ids);
+                    self.set_live(&changes);
                     self.commit_live(&orig);
                 } else if let (Some(id), false) = (collapse_to, shift) {
                     self.select_with_groups(&[id]);
@@ -602,7 +610,7 @@ impl App {
                 if !hl && let Kind::Pen(pen) = &mut o.kind {
                     pen.head_end = self.pen_head;
                 }
-                self.ed.insert(o);
+                self.ed.insert_on_canvas(o);
             }
             Drag::Erase { hit, .. } => {
                 if !hit.is_empty() {
@@ -629,15 +637,15 @@ impl App {
                     Some(t) => End::bound(t),
                     None => End::free(if shift { constrain_angle(start, end_pt, std::f64::consts::PI / 12.0) } else { end_pt }),
                 };
-                (dragged || (had_start && target.is_some())).then(|| self.ed.insert(self.connector_object(tool, s, e)))
+                (dragged || (had_start && target.is_some())).then(|| self.ed.insert_on_canvas(self.connector_object(tool, s, e)))
             }
             Tool::Table => {
                 let t = Table::new(Pt::new(start.x - 210.0, start.y - 66.0), 3, 3);
-                Some(self.ed.insert(Object::new(Kind::Table(t), Style { width: 2.0, fill: None, ..self.style.clone() })))
+                Some(self.ed.insert_on_canvas(Object::new(Kind::Table(t), Style { width: 2.0, fill: None, ..self.style.clone() })))
             }
             Tool::Text => {
                 let o = self.box_object(Tool::Text, Rect::new(start.x, start.y - self.label.size * 0.65, 12.0, self.label.size * 1.3));
-                Some(self.ed.insert(o))
+                Some(self.ed.insert_on_canvas(o))
             }
             Tool::Shape(_) | Tool::Sticky => {
                 let (dw, dh) = match tool {
@@ -651,7 +659,7 @@ impl App {
                     _ => Rect::new(start.x - dw / 2.0, start.y - dh / 2.0, dw, dh),
                 };
                 let r = if tool == Tool::Sticky { Rect::new(r.x, r.y, r.w.max(80.0), r.h.max(80.0)) } else { Rect::new(r.x, r.y, r.w.max(6.0), r.h.max(6.0)) };
-                Some(self.ed.insert(self.box_object(tool, r)))
+                Some(self.ed.insert_on_canvas(self.box_object(tool, r)))
             }
             _ => None,
         };
@@ -719,7 +727,7 @@ impl App {
             let aid = self.ed.doc.add_asset(mime, bytes);
             let off = 24.0 * num::f64_of(i);
             let frame = Frame::new(at.x - w * k / 2.0 + off, at.y - h * k / 2.0 + off, w * k, h * k);
-            ids.push(self.ed.insert(Object::new(
+            ids.push(self.ed.insert_on_canvas(Object::new(
                 Kind::Image(ImageObj { frame, asset: aid, latex: None, mono: false, recolor: Vec::new() }),
                 Style { width: 0.0, fill: None, ..Style::default() },
             )));
@@ -949,7 +957,7 @@ fn handle_double_click(app: &mut App, cam: &Cam, w: Pt) {
         }
     } else {
         let t = app.box_object(Tool::Text, Rect::new(w.x, w.y - app.label.size * 0.65, 12.0, app.label.size * 1.3));
-        let id = app.ed.insert(t);
+        let id = app.ed.insert_on_canvas(t);
         app.sel = vec![id.clone()];
         app.start_editing(&id, None);
         if let Some(e) = &mut app.editing {

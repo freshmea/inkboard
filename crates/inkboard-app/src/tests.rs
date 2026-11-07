@@ -2468,3 +2468,15 @@ fn text_lines_start_at_the_top_the_middle_or_the_bottom_of_their_area() {
         assert!((crate::render::line_origins(&lay, Align::Left, v, small)[0].1 - 100.0).abs() < 1e-9);
     }
 }
+
+#[test]
+fn korean_typing_and_paste_preserve_unicode() {
+    let mut t = T::new();
+    let a = edited_box(&mut t);
+    type_text(&mut t, "한글 직접 입력 ");
+    t.h.event(Event::Paste("PDF 복사 붙여넣기 ㄱㅏ".to_owned()));
+    t.h.step();
+    t.h.step();
+    t.app().commit_editing();
+    assert_eq!(label_of(&mut t, &a).to_plain(), "한글 직접 입력 PDF 복사 붙여넣기 ㄱㅏ");
+}

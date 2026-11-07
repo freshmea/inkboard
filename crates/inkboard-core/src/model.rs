@@ -531,6 +531,12 @@ pub struct Object {
     /// Group: objects sharing an id are selected together.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<Id>,
+    /// An explicit container; its geometry remains an ordinary rectangle for exports.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_frame: bool,
+    /// Owning frame on this page. Coordinates remain in world space.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<Id>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub locked: bool,
     #[serde(default = "default_layer")]
@@ -540,7 +546,7 @@ pub struct Object {
 impl Object {
     #[must_use]
     pub fn new(kind: Kind, style: Style) -> Self {
-        Self { id: Id::new(), kind, style, group: None, locked: false, layer: default_layer() }
+        Self { id: Id::new(), kind, style, group: None, is_frame: false, parent: None, locked: false, layer: default_layer() }
     }
 
     /// Shape, note or text.
@@ -701,17 +707,19 @@ impl Page {
     }
     #[must_use]
     pub fn is_visible(&self, o: &Object) -> bool {
-        self.layer(&o.layer).is_none_or(|l| l.visible)
+        !self.ancestors_match(o, |x| self.layer(&x.layer).is_some_and(|l| !l.visible))
     }
     #[must_use]
     pub fn is_locked(&self, o: &Object) -> bool {
-        o.locked || self.layer(&o.layer).is_some_and(|l| l.locked)
+        self.ancestors_match(o, |x| x.locked || self.layer(&x.layer).is_some_and(|l| l.locked))
     }
     /// Ids of the objects whose group is touched by `ids`.
     #[must_use]
     pub fn expand_groups(&self, ids: &[Id]) -> Vec<Id> {
         let groups: Vec<&Id> = self.objects.iter().filter(|o| ids.contains(&o.id)).filter_map(|o| o.group.as_ref()).collect();
-        self.objects.iter().filter(|o| ids.contains(&o.id) || o.group.as_ref().is_some_and(|g| groups.contains(&g))).map(|o| o.id.clone()).collect()
+        let grouped: Vec<Id> =
+            self.objects.iter().filter(|o| ids.contains(&o.id) || o.group.as_ref().is_some_and(|g| groups.contains(&g))).map(|o| o.id.clone()).collect();
+        self.expand_frames(&grouped)
     }
 }
 

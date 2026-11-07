@@ -201,7 +201,7 @@ impl Editor {
 
     /// Removes objects; bound connectors are detached (they keep their position).
     pub fn remove(&mut self, ids: &[Id]) {
-        let ids: Vec<Id> = ids.to_vec();
+        let ids = self.page().expand_frames(ids);
         self.transact(|e| {
             let page = e.page().clone();
             for o in &page.objects {
@@ -229,6 +229,7 @@ impl Editor {
     /// are not copied are broken (ends become free at their current position).
     #[must_use]
     pub fn clone_objects(page: &Page, ids: &[Id], d: Pt) -> Vec<Object> {
+        let ids = page.expand_frames(ids);
         let set: Vec<&Object> = page.objects.iter().filter(|o| ids.contains(&o.id)).collect();
         let idmap: HashMap<Id, Id> = set.iter().map(|o| (o.id.clone(), Id::new())).collect();
         let mut gmap: HashMap<Id, Id> = HashMap::new();
@@ -237,6 +238,7 @@ impl Editor {
             .map(|o| {
                 let mut c = o.clone();
                 c.id = idmap[&o.id].clone();
+                c.parent = o.parent.as_ref().and_then(|p| idmap.get(p)).cloned();
                 if let Some(g) = &o.group {
                     c.group = Some(gmap.entry(g.clone()).or_default().clone());
                 }
@@ -259,12 +261,30 @@ impl Editor {
 
     /// Pastes (already cloned) objects on top.
     pub fn insert_all(&mut self, objs: Vec<Object>) -> Vec<Id> {
-        self.transact(|e| objs.into_iter().map(|o| e.insert(o)).collect())
+        self.transact(|e| {
+            objs.into_iter()
+                .map(|mut o| {
+                    if o.is_frame
+                        && let Kind::Box(b) = &mut o.kind
+                    {
+                        let title = b.label.text.to_plain();
+                        if e.page()
+                            .objects
+                            .iter()
+                            .any(|existing| existing.is_frame && matches!(&existing.kind, Kind::Box(b) if b.label.text.to_plain() == title))
+                        {
+                            b.label.text = crate::RichText::plain(e.page().next_frame_name(&title));
+                        }
+                    }
+                    e.insert(o)
+                })
+                .collect()
+        })
     }
 
     pub fn duplicate(&mut self, ids: &[Id], d: Pt) -> Vec<Id> {
         let copies = Self::clone_objects(self.page(), ids, d);
-        self.insert_all(copies)
+        self.insert_all_on_canvas(copies)
     }
 
     /// Links two objects with a new connector.
@@ -277,6 +297,11 @@ impl Editor {
     }
 
     /* ------------------------------------------------ Ordre, groupes */
+
+    pub(crate) fn set_object_order(&mut self, after: Vec<Id>) {
+        let before = self.page().objects.iter().map(|o| o.id.clone()).collect();
+        self.apply(Op::Reorder { page: self.current.clone(), before, after });
+    }
 
     pub fn reorder(&mut self, ids: &[Id], mode: Order) {
         let before: Vec<Id> = self.page().objects.iter().map(|o| o.id.clone()).collect();
@@ -326,7 +351,8 @@ impl Editor {
         self.update_many(ids, |o| o.locked = locked);
     }
     pub fn translate(&mut self, ids: &[Id], d: Pt) {
-        self.update_many(ids, |o| o.translate(d));
+        let ids = self.page().expand_frames(ids);
+        self.update_many(&ids, |o| o.translate(d));
     }
 
     /* ------------------------------------------- Alignement, calques */
