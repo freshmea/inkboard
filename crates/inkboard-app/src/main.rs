@@ -72,6 +72,7 @@ mod session_net;
 #[cfg_attr(target_arch = "wasm32", path = "share_ui_web.rs")]
 mod share_ui;
 mod theme;
+mod tool_cursor;
 mod tools;
 mod ui;
 #[cfg_attr(not(target_arch = "wasm32"), path = "watch.rs")]

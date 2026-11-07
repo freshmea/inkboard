@@ -809,32 +809,47 @@ fn canvas_pointer(app: &mut App, ctx: &egui::Context, resp: &egui::Response, rec
                 app.release(cam, w, shift);
             }
         }
-        // cursor
-        if inside && app.drag.is_none() && app.editing.is_none() {
-            let icon = match app.tool {
-                Tool::Select => match app.hit_handle(cam, sp) {
-                    Some(HandleKind::Resize(h)) => match h {
-                        Handle::N | Handle::S => CursorIcon::ResizeVertical,
-                        Handle::E | Handle::W => CursorIcon::ResizeHorizontal,
-                        Handle::NE | Handle::SW => CursorIcon::ResizeNeSw,
-                        _ => CursorIcon::ResizeNwSe,
-                    },
-                    Some(HandleKind::Rotate) => CursorIcon::Grab,
-                    Some(_) => CursorIcon::Crosshair,
-                    None => match app.pick_at(w, 6.0 / f64::from(cam.zoom)) {
-                        Some(i) if app.sel.contains(&app.ed.page().objects[i].id) => CursorIcon::Move,
-                        _ => CursorIcon::Default,
-                    },
-                },
-                Tool::Hand => CursorIcon::Grab,
-                Tool::Text => CursorIcon::Text,
-                _ => CursorIcon::Crosshair,
-            };
-            ctx.set_cursor_icon(if app.space_down { CursorIcon::Grab } else { icon });
-        } else if matches!(app.drag, Some(Drag::Pan { .. })) {
-            ctx.set_cursor_icon(CursorIcon::Grabbing);
-        }
     }
+}
+
+fn canvas_cursor(app: &mut App, resp: &egui::Response, painter: &egui::Painter, cam: &Cam) {
+    let ctx = painter.ctx();
+    if !resp.contains_pointer() || app.editing.is_some() || egui::Popup::is_any_open(ctx) {
+        return;
+    }
+    let Some(sp) = ctx.input(|i| i.pointer.hover_pos()) else { return };
+    let resize_icon = |h| match h {
+        Handle::N | Handle::S => CursorIcon::ResizeVertical,
+        Handle::E | Handle::W => CursorIcon::ResizeHorizontal,
+        Handle::NE | Handle::SW => CursorIcon::ResizeNeSw,
+        _ => CursorIcon::ResizeNwSe,
+    };
+    let icon = match &app.drag {
+        Some(Drag::Pan { .. } | Drag::Rotate { .. }) => CursorIcon::Grabbing,
+        Some(Drag::Resize { handle, .. }) => resize_icon(*handle),
+        Some(Drag::Move { .. }) => CursorIcon::Move,
+        Some(Drag::Marquee { .. }) => CursorIcon::Default,
+        Some(Drag::Endpoint { .. } | Drag::Via { .. }) => CursorIcon::Crosshair,
+        _ if app.space_down => CursorIcon::Grab,
+        _ => match app.tool {
+            Tool::Select => match app.hit_handle(cam, sp) {
+                Some(HandleKind::Resize(h)) => resize_icon(h),
+                Some(HandleKind::Rotate) => CursorIcon::Grab,
+                Some(_) => CursorIcon::Crosshair,
+                None => match app.pick_at(cam.w(sp), 6.0 / f64::from(cam.zoom)) {
+                    Some(i) if app.sel.contains(&app.ed.page().objects[i].id) => CursorIcon::Move,
+                    _ => CursorIcon::Default,
+                },
+            },
+            Tool::Hand => CursorIcon::Grab,
+            Tool::Text | Tool::Shape(BoxGeom::Text) => CursorIcon::Text,
+            _ => {
+                crate::tool_cursor::paint(painter, app.tool, sp);
+                return;
+            }
+        },
+    };
+    ctx.set_cursor_icon(icon);
 }
 
 /// Draws the canvas and handles the user's input.
@@ -937,6 +952,7 @@ pub fn canvas(app: &mut App, ui: &mut egui::Ui) {
             crate::chrome::selection_menu(app, ui);
         }
     });
+    canvas_cursor(app, &resp, &painter, &cam);
 }
 
 fn handle_double_click(app: &mut App, cam: &Cam, w: Pt) {
