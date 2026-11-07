@@ -13,15 +13,16 @@ use inkboard_core::{BgPreset, BoxGeom, FontFamily, Id, Kind, Pattern, Pt, View};
 use std::time::Duration;
 
 /// Window width below which the toolbar moves under the title bar (`@media (max-width:1180px)`).
-const NARROW: f32 = 1180.0;
+const NARROW: f32 = 1320.0;
 
 /// Window width below which the row of tools does not fit any more (it then scrolls sideways).
-const TOOLS_ROW_WIDTH: f32 = 820.0;
+const TOOLS_ROW_WIDTH: f32 = 880.0;
 
 /// Toolbar tools, in separated groups; `(tool, icon, label)`.
 const TOOL_GROUPS: &[&[(Tool, &str, &str)]] = &[
     &[(Tool::Select, "select", "Select"), (Tool::Hand, "hand", "Hand")],
     &[(Tool::Pen, "pen", "Pen"), (Tool::Highlighter, "highlighter", "Highlighter"), (Tool::Eraser, "eraser", "Eraser")],
+    &[(Tool::Frame, "frame", "Frame")],
     &[
         (Tool::Shape(BoxGeom::Rect), "rect", "Rectangle"),
         (Tool::Shape(BoxGeom::Ellipse), "ellipse", "Ellipse"),
@@ -160,6 +161,9 @@ fn tool_row(app: &mut App, ui: &mut Ui, view_only: bool) {
                 } else if resp.clicked() {
                     app.set_tool(*tool);
                 }
+                if *tool == Tool::Frame {
+                    frame_presets(app, ui, view_only);
+                }
             }
         }
         if theme::icon_button(ui, "image", false, !view_only).on_hover_text(t("Insert image")).clicked() {
@@ -185,7 +189,28 @@ fn tool_row(app: &mut App, ui: &mut Ui, view_only: bool) {
 
 /// Tools that create an object and then give the hand back, so the lock makes sense for them (not Select, Hand, Eraser, Laser, nor the continuous Pen, Highlighter, Vote).
 fn lockable(tool: Tool) -> bool {
-    matches!(tool, Tool::Shape(_) | Tool::Line | Tool::Arrow | Tool::Text | Tool::Sticky | Tool::Table)
+    matches!(tool, Tool::Shape(_) | Tool::Frame | Tool::Line | Tool::Arrow | Tool::Text | Tool::Sticky | Tool::Table)
+}
+
+fn frame_presets(app: &mut App, ui: &mut Ui, view_only: bool) {
+    let palette = theme::current(ui.ctx());
+    let (rect, response) = ui.allocate_exact_size(vec2(18.0, 34.0), if view_only { Sense::hover() } else { Sense::click() });
+    if response.hovered() && !view_only {
+        ui.painter().rect_filled(rect, 6.0, palette.ui2);
+    }
+    let color = if view_only { palette.tx.gamma_multiply(0.35) } else { palette.tx };
+    crate::icons::paint(ui.painter(), "chevron-down", egui::Rect::from_center_size(rect.center(), vec2(13.0, 13.0)), color);
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, !view_only, t("Frame presets")));
+    let response = response.on_hover_text(t("Frame presets"));
+    egui::Popup::from_toggle_button_response(&response).close_behavior(egui::PopupCloseBehavior::CloseOnClick).show(|ui| {
+        for preset in crate::frames::PRESETS {
+            let label = format!("{} · {} × {}", t(preset.name), preset.width, preset.height);
+            if ui.add_enabled(!view_only, egui::Button::new(label)).clicked() {
+                app.insert_frame_preset(preset);
+                ui.close();
+            }
+        }
+    });
 }
 
 /* ---------------------------------------------------------- barre du bas */

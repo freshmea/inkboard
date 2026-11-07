@@ -43,6 +43,7 @@ mod bench_icons;
 mod chrome;
 mod clipboard;
 mod fonts;
+mod frames;
 mod i18n;
 mod i18n_fr;
 mod icons;

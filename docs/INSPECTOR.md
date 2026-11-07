@@ -14,8 +14,11 @@ The list shows objects in reverse drawing order, with frames and groups that can
 
 ## Frames
 
+- Choose **Frame** between Eraser and Shapes in the toolbar, or press **S**, then drag to draw a frame. A click creates a 640 × 480 frame. Double-click the tool or use the tool lock to draw several frames. The shortcut is customizable in Keyboard shortcuts.
+- The arrow beside Frame opens five presets. Click one to insert a selected frame at the visible canvas center. Dimensions are logical canvas units, independent of zoom: **1080p 1920 × 1080**, **4K 3840 × 2160**, **Phone 390 × 844**, **Tablet 834 × 1194**, and **Foldable phone 884 × 1104**. Large presets zoom out enough to reveal their border and title.
 - **Frame selection** creates a named rectangular container around the selected objects. With no selection it creates an empty 640 × 480 frame at the view center.
-- Select a frame and press **Enter** to edit its title.
+- Frame titles sit above the top-left of the rotated frame's bounding box, outside its interior. Their text size and gap stay constant on screen as the canvas zooms. Click or drag the title to select or move the frame and its contents. Double-click its title, or select a frame and press **Enter**, to rename it without changing its dimensions.
+- This title placement and fixed text size apply to the interactive canvas. SVG and PNG exports retain the existing model-space label layout and scale with the exported drawing.
 - New frames are named `Frame 1`, `Frame 2`, and so on. Copying a frame allocates a new numbered name when its title is already used; custom title prefixes are preserved. Parent frame lists every frame by its full title, with self/descendant/locked choices disabled.
 - Frame borders and title regions take precedence over overlapping container backgrounds. Selecting a child frame and dragging it does not move the previously selected parent.
 - Automatic nesting of a frame requires its full rotated rectangle to fit inside a strictly larger frame. Overlapping same-sized frame copies remain independent siblings.

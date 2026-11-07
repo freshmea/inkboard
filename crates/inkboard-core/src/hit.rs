@@ -69,8 +69,7 @@ impl Page {
                 if o.is_frame {
                     let inside = l.x.abs() <= hw + reach && l.y.abs() <= hh + reach;
                     let border = l.x.abs() >= hw - reach || l.y.abs() >= hh - reach;
-                    let title = !b.label.text.is_empty() && l.y + hh <= b.label.size * 1.5 + 12.0;
-                    return inside && (border || title);
+                    return inside && border;
                 }
                 match b.geom {
                     BoxGeom::Text | BoxGeom::Sticky => l.x.abs() <= hw + tol && l.y.abs() <= hh + tol,

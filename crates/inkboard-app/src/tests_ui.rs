@@ -270,6 +270,7 @@ fn check_action(action: Action, sc: Shortcut) -> Check {
         | Action::ToolPen
         | Action::ToolHighlighter
         | Action::ToolEraser
+        | Action::ToolFrame
         | Action::ToolRect
         | Action::ToolEllipse
         | Action::ToolDiamond

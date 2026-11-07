@@ -16,6 +16,7 @@ pub enum Tool {
     Pen,
     Highlighter,
     Eraser,
+    Frame,
     Shape(BoxGeom),
     Line,
     Arrow,
@@ -279,8 +280,7 @@ impl App {
             }
             return;
         }
-        let tol = 6.0 / f64::from(cam.zoom);
-        if let Some(i) = self.pick_at(w, tol) {
+        if let Some(i) = self.pick_canvas(cam, screen) {
             let o = self.ed.page().objects[i].clone();
             if shift {
                 let ids = self.ed.page().expand_groups(std::slice::from_ref(&o.id));
@@ -326,7 +326,7 @@ impl App {
                 self.drag = Some(Drag::Erase { hit: Vec::new(), last: w });
                 self.erase_at(w, w, f64::from(cam.zoom));
             }
-            Tool::Text | Tool::Sticky | Tool::Shape(_) | Tool::Line | Tool::Arrow | Tool::Table => {
+            Tool::Text | Tool::Sticky | Tool::Shape(_) | Tool::Frame | Tool::Line | Tool::Arrow | Tool::Table => {
                 let start = if self.snap { snap_point(w, f64::from(crate::render::GRID)) } else { w };
                 let target = matches!(tool, Tool::Line | Tool::Arrow).then(|| self.ed.page().attach_target(w, 4.0 / f64::from(cam.zoom), &[])).flatten();
                 self.drag = Some(Drag::Create { tool, start, start_target: target });
@@ -538,7 +538,7 @@ impl App {
                 };
                 Some(self.connector_object(tool, s, end))
             }
-            Tool::Shape(_) | Tool::Sticky | Tool::Table | Tool::Text => {
+            Tool::Shape(_) | Tool::Sticky | Tool::Frame | Tool::Table | Tool::Text => {
                 let mut d = cur - start;
                 if shift {
                     let m = d.x.abs().max(d.y.abs());
@@ -549,7 +549,7 @@ impl App {
                 } else {
                     Rect::from_corners(start, start + d)
                 };
-                (matches!(tool, Tool::Shape(_) | Tool::Sticky)).then(|| self.box_object(tool, r))
+                (matches!(tool, Tool::Shape(_) | Tool::Sticky | Tool::Frame)).then(|| self.box_object(tool, r))
             }
             _ => None,
         }
@@ -563,6 +563,9 @@ impl App {
     }
 
     fn box_object(&self, tool: Tool, r: Rect) -> Object {
+        if tool == Tool::Frame {
+            return crate::frames::object(self.ed.page(), r);
+        }
         let (geom, style, align) = match tool {
             Tool::Sticky => {
                 (BoxGeom::Sticky, Style { fill: Some(self.style.fill.unwrap_or(style::NOTE_YELLOW)), width: 0.0, ..self.style.clone() }, Align::Center)
@@ -647,9 +650,10 @@ impl App {
                 let o = self.box_object(Tool::Text, Rect::new(start.x, start.y - self.label.size * 0.65, 12.0, self.label.size * 1.3));
                 Some(self.ed.insert_on_canvas(o))
             }
-            Tool::Shape(_) | Tool::Sticky => {
+            Tool::Shape(_) | Tool::Sticky | Tool::Frame => {
                 let (dw, dh) = match tool {
                     Tool::Sticky => (200.0, 200.0),
+                    Tool::Frame => (640.0, 480.0),
                     Tool::Shape(BoxGeom::Triangle) => (140.0, 120.0),
                     Tool::Shape(BoxGeom::Diamond) => (150.0, 120.0),
                     _ => (150.0, 100.0),
@@ -673,7 +677,7 @@ impl App {
             }
             if !self.tool_lock {
                 self.tool = Tool::Select;
-            } else if !matches!(tool, Tool::Text | Tool::Sticky | Tool::Shape(_)) {
+            } else if !matches!(tool, Tool::Text | Tool::Sticky | Tool::Shape(_) | Tool::Frame) {
                 self.sel.clear();
             }
         }
@@ -780,7 +784,7 @@ fn canvas_pointer(app: &mut App, ctx: &egui::Context, resp: &egui::Response, rec
         }
         if secondary
             && inside
-            && let Some(i) = app.pick_at(w, 6.0 / f64::from(cam.zoom))
+            && let Some(i) = app.pick_canvas(cam, sp)
         {
             let id = app.ed.page().objects[i].id.clone();
             if !app.sel.contains(&id) {
@@ -836,7 +840,7 @@ fn canvas_cursor(app: &mut App, resp: &egui::Response, painter: &egui::Painter, 
                 Some(HandleKind::Resize(h)) => resize_icon(h),
                 Some(HandleKind::Rotate) => CursorIcon::Grab,
                 Some(_) => CursorIcon::Crosshair,
-                None => match app.pick_at(cam.w(sp), 6.0 / f64::from(cam.zoom)) {
+                None => match app.pick_canvas(cam, sp) {
                     Some(i) if app.sel.contains(&app.ed.page().objects[i].id) => CursorIcon::Move,
                     _ => CursorIcon::Default,
                 },
@@ -938,6 +942,7 @@ pub fn canvas(app: &mut App, ui: &mut egui::Ui) {
             app.agent.remote.ghosts.values().filter(|g| page.index_of(&g.object.id).is_some()).map(|g| &g.object).collect();
         rd.page(rect, editing_id.as_ref(), &ghost, &moving);
     }
+    crate::frames::paint_titles(&painter, app.ed.page(), &cam, dark, editing_id.as_ref(), &ghost);
     draw_overlay(app, &painter, &cam, dark);
     laser_trail(app, &painter, &ctx, if resp.contains_pointer() { ptr } else { None });
     app.agent.paint(&painter, &cam, &ctx, app.ed.page());
@@ -956,8 +961,7 @@ pub fn canvas(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn handle_double_click(app: &mut App, cam: &Cam, w: Pt) {
-    let tol = 6.0 / f64::from(cam.zoom);
-    if let Some(i) = app.pick_at(w, tol) {
+    if let Some(i) = app.pick_canvas(cam, cam.s(w)) {
         let o = app.ed.page().objects[i].clone();
         match &o.kind {
             Kind::Box(_) | Kind::Connector(_) => {

@@ -16,6 +16,8 @@ const ICONS: &[(&str, &str)] = &[
     ("pen", r#"<path d="M4 20l1-4L16.5 4.5a2 2 0 013 3L8 19z"/><path d="M14 7l3 3"/>"#),
     ("highlighter", r#"<path d="M9 11l4 4M5 19h4l10-10a2 2 0 000-3l-1-1a2 2 0 00-3 0L5 15z"/><path d="M4 21h16"/>"#),
     ("eraser", r#"<path d="M20 20H9L4 15a2 2 0 010-3l8-8a2 2 0 013 0l5 5a2 2 0 010 3l-7 8"/><path d="M8 8l8 8"/>"#),
+    ("frame", r#"<path d="M7 3v18M17 3v18M3 7h18M3 17h18"/>"#),
+    ("chevron-down", r#"<path d="M6 9l6 6 6-6"/>"#),
     ("rect", r#"<rect x="4" y="6" width="16" height="12" rx="2"/>"#),
     ("ellipse", r#"<ellipse cx="12" cy="12" rx="9" ry="7"/>"#),
     ("diamond", r#"<path d="M12 3l9 9-9 9-9-9z"/>"#),

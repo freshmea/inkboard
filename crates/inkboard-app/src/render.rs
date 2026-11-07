@@ -661,7 +661,7 @@ impl Renderer<'_> {
                 }
             }
         }
-        if !skip_text && !b.label.text.is_empty() && num::f32(b.label.size) * self.cam.zoom >= 3.0 {
+        if !o.is_frame && !skip_text && !b.label.text.is_empty() && num::f32(b.label.size) * self.cam.zoom >= 3.0 {
             let lay = b.layout(self.measurer);
             let fr = f;
             self.paint_lines(&lay, &b.label, b.label_rect(), &|p| fr.to_world(p), num::f32(f.angle), label_color, false);

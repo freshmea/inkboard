@@ -95,7 +95,9 @@ fn apply_text(o: &mut Object, cell: Option<(usize, usize)>, rich: &RichText, def
                 if let Some(lang) = b.lang {
                     b.label.text = inkboard_core::highlight::highlight_lang(&rich.to_plain(), lang);
                 }
-                b.fit(m);
+                if !o.is_frame {
+                    b.fit(m);
+                }
             }
         }
         Kind::Table(t) => {
@@ -168,6 +170,9 @@ impl App {
         if e.synced != e.buf {
             e.rich.apply_edit(&e.synced, &e.buf);
             e.synced = e.buf.clone();
+        }
+        if e.orig.is_frame {
+            return;
         }
         let (id, rich, align) = (e.id.clone(), e.rich.clone(), e.align);
         // always fitted from the object as it was before editing (as the validation does), so that fitting twice cannot make it grow twice
@@ -440,6 +445,10 @@ fn editor_layout(app: &mut App, cam: &Cam, dark: bool) -> Option<EditorLayout> {
         return None;
     };
     let (area, family, size, align, color, no_wrap): (egui::Rect, FontFamily, f32, Align, Color32, bool) = match &o.kind {
+        Kind::Box(_) if o.is_frame => {
+            let title = crate::frames::title_layout(&app.measurer.0, cam, o)?;
+            (title.rect, FontFamily::Sans, crate::frames::TITLE_SIZE, Align::Left, col(o.style.stroke, dark, 1.0), true)
+        }
         Kind::Box(b) => {
             let color = if b.geom == BoxGeom::Sticky { Color32::from_rgb(0x1e, 0x1e, 0x1e) } else { col(o.style.stroke, dark, 1.0) };
             let area = label_screen_rect(cam, &b.frame, b.label_rect());
@@ -480,11 +489,12 @@ fn editor_layout(app: &mut App, cam: &Cam, dark: bool) -> Option<EditorLayout> {
     // same layout as the final rendering: wrap width (model units) and text alignment of the box
     let bar_align = matches!(o.kind, Kind::Box(_)).then_some(align);
     let lay_wrap = match &o.kind {
-        Kind::Box(b) if b.geom != BoxGeom::Text => Some(f64::from(area.width() / cam.zoom)),
+        Kind::Box(b) if b.geom != BoxGeom::Text && !o.is_frame => Some(f64::from(area.width() / cam.zoom)),
         Kind::Table(_) => Some(f64::from(area.width() / cam.zoom)),
         _ => None,
     };
     let valign = match &o.kind {
+        Kind::Box(_) if o.is_frame => inkboard_core::VAlign::Top,
         Kind::Box(b) => b.label.valign,
         _ => inkboard_core::VAlign::Middle,
     };
@@ -582,7 +592,11 @@ pub fn draw_text_editor(app: &mut App, ui: &mut egui::Ui, cam: &Cam) {
     };
     let size = size.max(8.0);
 
-    editor_formatting(app, &ctx, anchor, bar_align);
+    let frame_title = app.editing.as_ref().is_some_and(|e| e.orig.is_frame);
+    let title_focused = frame_title && app.editing.as_ref().is_some_and(|e| e.focused);
+    if !frame_title {
+        editor_formatting(app, &ctx, anchor, bar_align);
+    }
     let Some(ed) = app.editing.as_mut() else { return };
     if let Some((a, b)) = ed.restore_sel.take() {
         let mut st = egui::text_edit::TextEditState::load(&ctx, field_id).unwrap_or_default();
@@ -642,7 +656,8 @@ pub fn draw_text_editor(app: &mut App, ui: &mut egui::Ui, cam: &Cam) {
             };
             let caret_stroke = ui.visuals().text_cursor.stroke;
             ui.visuals_mut().text_cursor.stroke = Stroke::NONE;
-            let out = egui::TextEdit::multiline(buf)
+            let field = if frame_title { egui::TextEdit::singleline(buf) } else { egui::TextEdit::multiline(buf) };
+            let out = field
                 .id(field_id)
                 .frame(false)
                 // egui keeps a 4 × 2 margin even without a frame: it would shift the text off the box it is typed in
@@ -660,7 +675,7 @@ pub fn draw_text_editor(app: &mut App, ui: &mut egui::Ui, cam: &Cam) {
                 out.response.request_focus();
                 ed.focused = true;
             }
-            if ui.input(|i| i.key_pressed(egui::Key::Escape) || (i.key_pressed(egui::Key::Enter) && i.modifiers.command)) {
+            if ui.input(|i| i.key_pressed(egui::Key::Escape) || (i.key_pressed(egui::Key::Enter) && (title_focused || i.modifiers.command))) {
                 done = true;
             }
         });

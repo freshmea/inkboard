@@ -38,6 +38,7 @@ pub enum Action {
     ToolPen,
     ToolHighlighter,
     ToolEraser,
+    ToolFrame,
     ToolRect,
     ToolEllipse,
     ToolDiamond,
@@ -52,7 +53,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 41] = [
+    pub const ALL: [Action; 42] = [
         Action::New,
         Action::Open,
         Action::Save,
@@ -83,6 +84,7 @@ impl Action {
         Action::ToolPen,
         Action::ToolHighlighter,
         Action::ToolEraser,
+        Action::ToolFrame,
         Action::ToolRect,
         Action::ToolEllipse,
         Action::ToolDiamond,
@@ -129,6 +131,7 @@ impl Action {
             Action::ToolPen => "tool.pen",
             Action::ToolHighlighter => "tool.highlighter",
             Action::ToolEraser => "tool.eraser",
+            Action::ToolFrame => "tool.frame",
             Action::ToolRect => "tool.rect",
             Action::ToolEllipse => "tool.ellipse",
             Action::ToolDiamond => "tool.diamond",
@@ -179,6 +182,7 @@ impl Action {
             Action::ToolPen => "Tool: pen",
             Action::ToolHighlighter => "Tool: highlighter",
             Action::ToolEraser => "Tool: eraser",
+            Action::ToolFrame => "Tool: frame",
             Action::ToolRect => "Tool: rectangle",
             Action::ToolEllipse => "Tool: ellipse",
             Action::ToolDiamond => "Tool: diamond",
@@ -211,6 +215,7 @@ impl Action {
             Action::ToolPen => Tool::Pen,
             Action::ToolHighlighter => Tool::Highlighter,
             Action::ToolEraser => Tool::Eraser,
+            Action::ToolFrame => Tool::Frame,
             Action::ToolRect => Tool::Shape(BoxGeom::Rect),
             Action::ToolEllipse => Tool::Shape(BoxGeom::Ellipse),
             Action::ToolDiamond => Tool::Shape(BoxGeom::Diamond),
@@ -374,6 +379,7 @@ impl Keymap {
             Action::ToolPen => vec![S::key(Key::P)],
             Action::ToolHighlighter => vec![S::key(Key::M)],
             Action::ToolEraser => vec![S::key(Key::E)],
+            Action::ToolFrame => vec![S::key(Key::S)],
             Action::ToolRect => vec![S::key(Key::R)],
             Action::ToolEllipse => vec![S::key(Key::O)],
             Action::ToolDiamond => vec![S::key(Key::D)],
@@ -486,12 +492,13 @@ impl Keymap {
         }
     }
 
-    /// Reads a settings file. Missing actions keep their default shortcut; unknown or unreadable
-    /// entries are ignored. Also returns the number of ignored entries.
+    /// Reads a settings file. Missing actions keep defaults unless a loaded binding already uses them.
+    /// Unknown or unreadable entries are ignored. Also returns the number of ignored entries.
     pub fn from_json(s: &str) -> Result<(Keymap, usize), String> {
         let v: serde_json::Value = serde_json::from_str(s).map_err(|e| format!("invalid JSON: {e}"))?;
         let b = v.get("bindings").and_then(|b| b.as_object()).ok_or("settings without \"bindings\"")?;
         let mut km = Keymap::default();
+        let mut explicit = std::collections::BTreeSet::new();
         let mut ignored = 0;
         for (id, list) in b {
             let Some(a) = Action::from_id(id) else {
@@ -513,6 +520,13 @@ impl Keymap {
                 continue; // every entry unreadable: the default shortcut stays (an explicit `[]` removes it)
             }
             km.map.insert(a, scs);
+            explicit.insert(a);
+        }
+        let assigned: Vec<Shortcut> = explicit.iter().flat_map(|action| km.bindings(*action).iter().copied()).collect();
+        for (action, bindings) in &mut km.map {
+            if !explicit.contains(action) {
+                bindings.retain(|shortcut| !assigned.contains(shortcut));
+            }
         }
         Ok((km, ignored))
     }
@@ -529,7 +543,6 @@ mod tests {
             assert!(!km.bindings(a).is_empty(), "{a:?} has no default shortcut");
         }
         assert!(km.conflicts().is_empty(), "{:?}", km.conflicts());
-        assert_eq!(Action::ALL.len(), 41);
     }
 
     #[test]
@@ -621,6 +634,21 @@ mod tests {
         assert!(k2.is_default(Action::Open), "actions not mentioned: default values");
         assert!(Keymap::from_json("not json").is_err());
         assert!(Keymap::from_json("{}").is_err());
+    }
+
+    #[test]
+    fn a_new_action_default_yields_to_existing_saved_shortcuts() {
+        let (loaded, ignored) = Keymap::from_json(r#"{"version":1,"bindings":{"tool.rect":["S"]}}"#).unwrap();
+        assert_eq!(ignored, 0);
+        assert_eq!(loaded.action_for(Key::S, Modifiers::NONE), Some(Action::ToolRect));
+        assert!(loaded.bindings(Action::ToolFrame).is_empty());
+        assert!(loaded.conflicts().is_empty());
+        assert_eq!(Keymap::from_json(&loaded.to_json()).unwrap().0, loaded);
+
+        let (explicit, _) = Keymap::from_json(r#"{"version":1,"bindings":{"tool.rect":["S"],"tool.frame":["S"]}}"#).unwrap();
+        assert_eq!(explicit.bindings(Action::ToolFrame), &[Shortcut::key(Key::S)]);
+        assert_eq!(explicit.bindings(Action::ToolRect), &[Shortcut::key(Key::S)]);
+        assert_eq!(explicit.conflicts().len(), 1);
     }
 
     #[test]
