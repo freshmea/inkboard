@@ -50,10 +50,11 @@ pub enum Action {
     ToolTable,
     ToolLaser,
     Present,
+    Zen,
 }
 
 impl Action {
-    pub const ALL: [Action; 42] = [
+    pub const ALL: [Action; 43] = [
         Action::New,
         Action::Open,
         Action::Save,
@@ -96,6 +97,7 @@ impl Action {
         Action::ToolTable,
         Action::ToolLaser,
         Action::Present,
+        Action::Zen,
     ];
 
     /// Stable identifier used in the settings file.
@@ -143,6 +145,7 @@ impl Action {
             Action::ToolTable => "tool.table",
             Action::ToolLaser => "tool.laser",
             Action::Present => "view.present",
+            Action::Zen => "view.zen",
         }
     }
 
@@ -194,6 +197,7 @@ impl Action {
             Action::ToolTable => "Tool: table",
             Action::ToolLaser => "Tool: laser pointer",
             Action::Present => "Present full screen",
+            Action::Zen => "Zen mode",
         }
     }
 
@@ -202,7 +206,7 @@ impl Action {
             Action::New | Action::Open | Action::Save | Action::SaveAs => "File",
             Action::Undo | Action::Redo | Action::SelectAll | Action::Duplicate | Action::Delete | Action::Group | Action::Ungroup | Action::EditText => "Edit",
             Action::Front | Action::Forward | Action::Backward | Action::Back => "Order",
-            Action::Zoom100 | Action::ZoomFit | Action::ZoomIn | Action::ZoomOut | Action::Present => "View",
+            Action::Zoom100 | Action::ZoomFit | Action::ZoomIn | Action::ZoomOut | Action::Present | Action::Zen => "View",
             Action::Bold | Action::Italic | Action::Underline | Action::Strike => "Text",
             _ => "Tools",
         }
@@ -391,6 +395,7 @@ impl Keymap {
             Action::ToolTable => vec![S::key(Key::B)],
             Action::ToolLaser => vec![S::key(Key::F)],
             Action::Present => vec![S::key(Key::F5)],
+            Action::Zen => vec![S::key(Key::F4)],
         }
     }
 

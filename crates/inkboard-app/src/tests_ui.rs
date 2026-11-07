@@ -286,6 +286,12 @@ fn check_action(action: Action, sc: Shortcut) -> Check {
             press(t, sc);
             ensure!(t.app().tool == want, "tool is {:?}, expected {want:?}", t.app().tool);
         }
+        Action::Zen => {
+            press(t, sc);
+            ensure!(t.app().zen_mode, "Zen mode not started");
+            press(t, sc);
+            ensure!(!t.app().zen_mode, "Zen mode not left by the second press");
+        }
         Action::Present => {
             press(t, sc);
             ensure!(t.app().presenting, "presentation not started");
@@ -312,6 +318,119 @@ fn every_keymap_action_works_from_its_default_shortcut() {
     }
     assert!(fired >= Action::ALL.len());
     assert!(failures.is_empty(), "{} action(s) failed:\n{}", failures.len(), failures.join("\n"));
+}
+
+#[test]
+fn zen_f4_hides_chrome_preserves_preferences_and_keeps_drawing() {
+    let mut t = T::new();
+    let card_visible = |t: &T, name: &str| t.h.ctx.memory(|m| m.areas().visible_last_frame(&egui::LayerId::new(egui::Order::Middle, egui::Id::new(name))));
+    t.app().inspector.open = true;
+    t.app().layers_open = true;
+    t.app().palette.open = true;
+    t.app().style.width = 7.0;
+    t.h.step();
+    assert!(t.h.query_by_label("Hide details").is_some());
+    assert!(card_visible(&t, "zoom"));
+    t.key(Key::F4);
+    assert!(t.app().zen_mode);
+    assert!(!t.app().presenting && t.app().present_req.is_none());
+    assert!(!t.app().palette.open, "an existing icon palette is hidden on entry");
+    for label in ["Hide details", "Details", "Stroke color", "Objects and frames", "Unsaved"] {
+        assert!(t.h.query_by_label(label).is_none(), "{label} remains visible in Zen mode");
+    }
+    for card in ["title", "props", "inspector", "pages", "zoom", "help", "icon-palette"] {
+        assert!(!card_visible(&t, card), "{card} remains visible in Zen mode");
+    }
+    assert!(card_visible(&t, "tools"));
+    t.h.get_by_label("Rectangle").click();
+    t.h.step();
+    t.h.step();
+    assert_eq!(t.app().tool, Tool::Shape(BoxGeom::Rect));
+    t.drag((100.0, 100.0), (300.0, 200.0));
+    assert_eq!(t.objects().len(), 1, "the retained toolbar and canvas create objects");
+    assert_eq!(t.objects()[0].style.width, 7.0);
+    t.h.get_by_label("Exit Zen mode").click();
+    t.h.step();
+    t.h.step();
+    assert!(!t.app().zen_mode);
+    assert!(t.app().inspector.open && t.app().layers_open && t.app().palette.open);
+    assert_eq!(t.app().style.width, 7.0);
+    assert!(t.h.query_by_label("Hide details").is_some());
+    assert!(card_visible(&t, "zoom"));
+}
+
+#[test]
+fn zen_f4_does_not_interrupt_text_editing_or_shortcut_recording() {
+    let (mut t, [x, ..]) = board();
+    t.key(Key::F4);
+    t.app().sel = vec![x.clone()];
+    t.key(Key::Enter);
+    assert!(t.app().editing.is_some());
+    t.key(Key::F4);
+    assert!(t.app().zen_mode && t.app().editing.is_some());
+    type_text(&mut t, "still editing");
+    t.key(Key::Escape);
+    assert!(t.app().editing.is_none(), "Escape retains its text editing behavior");
+    assert!(t.app().zen_mode, "Escape does not unexpectedly leave Zen mode");
+    assert!(label_text(&mut t, &x).to_plain().contains("still editing"));
+    t.app().dialog = Some(Dialog::Shortcuts { filter: String::new(), recording: Some(Action::Zen) });
+    t.h.step();
+    t.key(Key::F4);
+    assert!(t.app().zen_mode, "recording a shortcut does not execute it");
+}
+
+#[test]
+fn zen_shortcut_can_be_customized_and_stays_separate_from_presentation() {
+    let mut t = T::new();
+    let sc = Shortcut::ctrl_shift(Key::J);
+    t.app().keymap.remove(Action::Zen, Shortcut::key(Key::F4));
+    t.app().keymap.add(Action::Zen, sc).unwrap();
+    t.key(Key::F4);
+    assert!(!t.app().zen_mode, "the old binding is replaced");
+    press(&mut t, sc);
+    assert!(t.app().zen_mode);
+    t.key(Key::F5);
+    assert!(t.app().presenting && t.app().zen_mode);
+    t.key(Key::Escape);
+    assert!(!t.app().presenting && t.app().zen_mode, "presentation returns to Zen mode");
+    press(&mut t, sc);
+    assert!(!t.app().zen_mode);
+    assert!(!t.app().inspector.open && !t.app().layers_open && !t.app().palette.open);
+}
+
+#[test]
+fn zen_fit_uses_the_full_canvas_with_details_previously_open() {
+    let mut t = T::new();
+    let id = t.add_rect(100.0, 100.0, 800.0, 300.0);
+    t.app().sel = vec![id];
+    t.app().inspector.open = true;
+    t.app().fit_view(true);
+    let with_details = t.app().ed.page().view;
+    t.key(Key::F4);
+    t.app().fit_view(true);
+    let selected = t.app().sel.clone();
+    let bounds = t.app().ed.page().bounds_of(&selected).unwrap();
+    let view = t.app().ed.page().view;
+    let (width, height) = t.app().canvas_size;
+    assert!((view.x + bounds.center().x * view.zoom - f64::from(width) / 2.0).abs() < 1e-6);
+    assert!((view.y + bounds.center().y * view.zoom - f64::from(height) / 2.0).abs() < 1e-6);
+    assert!(view.zoom > with_details.zoom, "hidden panels do not reserve canvas space");
+    assert!(t.app().inspector.open, "fitting does not change the Details preference");
+}
+
+#[test]
+fn zen_finishes_live_style_changes_before_hiding_the_panel() {
+    let mut t = T::new();
+    let id = t.add_rect(100.0, 100.0, 100.0, 60.0);
+    t.app().sel = vec![id.clone()];
+    let original = t.app().ed.page().get(&id).unwrap().style.opacity;
+    t.app().live_apply(&|o| o.style.opacity = 0.4);
+    assert!(t.app().prop_edit.is_some());
+    t.key(Key::F4);
+    assert!(t.app().zen_mode && t.app().prop_edit.is_none());
+    assert_eq!(t.app().ed.page().get(&id).unwrap().style.opacity, 0.4);
+    t.key_mod(egui::Modifiers::COMMAND, Key::Z);
+    assert_eq!(t.app().ed.page().get(&id).unwrap().style.opacity, original);
 }
 
 fn autosave_file() -> PathBuf {

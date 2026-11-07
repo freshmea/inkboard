@@ -12,11 +12,11 @@ use inkboard_core::editor::Order;
 use inkboard_core::{BgPreset, BoxGeom, FontFamily, Id, Kind, Pattern, Pt, View};
 use std::time::Duration;
 
-/// Window width below which the toolbar moves under the title bar (`@media (max-width:1180px)`).
-const NARROW: f32 = 1320.0;
+/// Leaves room for the title card beside the complete toolbar.
+const NARROW: f32 = 1360.0;
 
 /// Window width below which the row of tools does not fit any more (it then scrolls sideways).
-const TOOLS_ROW_WIDTH: f32 = 880.0;
+const TOOLS_ROW_WIDTH: f32 = 900.0;
 
 /// Toolbar tools, in separated groups; `(tool, icon, label)`.
 const TOOL_GROUPS: &[&[(Tool, &str, &str)]] = &[
@@ -36,6 +36,11 @@ const TOOL_GROUPS: &[&[(Tool, &str, &str)]] = &[
 /// Shows the whole frame; call it before the canvas on every frame.
 pub fn show(app: &mut App, ctx: &Context) {
     let narrow = ctx.content_rect().width() < NARROW;
+    if app.zen_mode {
+        tool_card(app, ctx, narrow);
+        crate::library::show(app, ctx);
+        return;
+    }
     title_card(app, ctx);
     tool_card(app, ctx, narrow);
     panel::show(app, ctx, narrow);
@@ -111,13 +116,13 @@ fn save_state(app: &App) -> String {
 
 fn tool_card(app: &mut App, ctx: &Context, narrow: bool) {
     let view_only = app.view_only();
-    let (anchor, offset) = if narrow { (Align2::LEFT_TOP, vec2(12.0, 62.0)) } else { (Align2::CENTER_TOP, vec2(0.0, 12.0)) };
+    let (anchor, offset) = if narrow && !app.zen_mode { (Align2::LEFT_TOP, vec2(12.0, 62.0)) } else { (Align2::CENTER_TOP, vec2(0.0, 12.0)) };
     theme::floating(ctx, "tools", anchor, offset, 4, |ui| {
         if narrow && ctx.content_rect().width() < TOOLS_ROW_WIDTH {
-            // a phone is narrower than the row of tools (about 760 px): it scrolls sideways (a drag) instead of losing the last tools
-            let room = ctx.content_rect().width() - 2.0 * offset.x - 16.0;
+            let room = ctx.content_rect().width() - 24.0 - 16.0;
             let out = egui::ScrollArea::horizontal()
                 .max_width(room.max(120.0))
+                .min_scrolled_width(room.max(120.0))
                 .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
                 .show(ui, |ui| tool_row(app, ui, view_only));
             // a chevron tells that there are more tools to drag into view
@@ -183,6 +188,13 @@ fn tool_row(app: &mut App, ui: &mut Ui, view_only: bool) {
         resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, app.tool_lock, &name));
         if resp.on_hover_text(tip).clicked() {
             app.tool_lock = !app.tool_lock;
+        }
+        theme::vsep(ui);
+        let name = t(if app.zen_mode { "Exit Zen mode" } else { "Zen mode" });
+        let resp = theme::icon_button(ui, "full", app.zen_mode, true);
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, app.zen_mode, &name));
+        if resp.on_hover_text(format!("{name} ({})", app.keymap.label(Action::Zen))).clicked() {
+            app.run_action(Action::Zen);
         }
     });
 }
@@ -686,6 +698,10 @@ fn main_menu(app: &mut App, ui: &mut Ui) {
         }
         theme::menu_sep(ui);
         theme::menu_label(ui, "View");
+        if theme::menu_item(ui, Some("full"), "Zen mode", &key(app, Action::Zen), app.zen_mode, true) {
+            app.run_action(Action::Zen);
+            ui.close();
+        }
         if mi(ui, "play", "Present full screen", &key(app, Action::Present)) {
             app.present_req = Some(true);
         }

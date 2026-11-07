@@ -187,6 +187,9 @@ pub struct App {
     pub fit_pending: bool,
     /// Presentation mode: full screen, no interface, page-by-page navigation.
     pub presenting: bool,
+    /// Canvas and top tools, independent of presentation and panel preferences.
+    pub zen_mode: bool,
+    zen_library_open: bool,
     /// Request to enter (`true`) or leave (`false`) presentation mode, handled on the next frame.
     pub present_req: Option<bool>,
     /// Tool that was active before the presentation.
@@ -293,6 +296,8 @@ impl App {
             frames: 0,
             fit_pending: true,
             presenting: false,
+            zen_mode: false,
+            zen_library_open: false,
             present_req: None,
             prev_tool: Tool::Select,
             timer: None,
@@ -821,6 +826,7 @@ impl App {
     }
 
     pub(crate) fn fit_view_with_inspector(&mut self, only_selection: bool, inspector_open: bool) {
+        let inspector_open = inspector_open && !self.zen_mode && !self.presenting;
         let page = self.ed.page();
         let b = if only_selection && !self.sel.is_empty() { page.bounds_of(&self.sel) } else { page.content_bounds() };
         let (w, h) = (f64::from(self.canvas_size.0.max(100.0)), f64::from(self.canvas_size.1.max(100.0)));
@@ -878,6 +884,17 @@ impl App {
             self.tool = self.prev_tool;
         }
         platform::set_fullscreen(ctx, on);
+    }
+
+    pub fn toggle_zen(&mut self) {
+        self.live_end();
+        self.zen_mode = !self.zen_mode;
+        if self.zen_mode {
+            self.zen_library_open = self.palette.open;
+            self.palette.open = false;
+        } else {
+            self.palette.open = self.zen_library_open;
+        }
     }
 
     /// Presentation-mode keys: arrows / space / page keys to navigate, Escape or F5 to quit.
@@ -1055,6 +1072,7 @@ impl App {
             }
             Action::ZoomFit => self.fit_view(false),
             Action::Present => self.present_req = Some(!self.presenting),
+            Action::Zen => self.toggle_zen(),
             Action::ZoomIn => self.zoom_by(1.25),
             Action::ZoomOut => self.zoom_by(0.8),
             Action::EditText => {
@@ -1335,12 +1353,14 @@ impl eframe::App for App {
             ui::present_overlay(self, ctx);
         } else {
             crate::chrome::show(self, ctx);
-            crate::inspector::show(self, ctx);
+            if !self.zen_mode {
+                crate::inspector::show(self, ctx);
+            }
         }
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(ctx, |ui| crate::tools::canvas(self, ui));
         ui::dialogs(self, ctx);
         crate::join_ui::show(self, ctx);
-        if !self.presenting {
+        if !self.presenting && !self.zen_mode {
             crate::share_ui::show(self, ctx);
             crate::presence::follow_ui(self, ctx);
         }
@@ -1348,7 +1368,9 @@ impl eframe::App for App {
             r.feed(inkboard_pen::last_sample(), self.pen_force);
             crate::pen_test::panel(r, ctx, self.pen_force);
         }
-        ui::toast(self, ctx);
+        if !self.zen_mode {
+            ui::toast(self, ctx);
+        }
         let title = self.title();
         if title != self.last_title {
             platform::set_title(ctx, &title);

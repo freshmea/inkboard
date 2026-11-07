@@ -299,11 +299,11 @@ fn a_stroke_of_the_host_in_progress_is_seen_by_the_guests_then_replaced_by_the_o
     let a = r.join("Anna", Role::Edit);
     let b = r.join("Marc", Role::Edit);
     r.host.tool(Tool::Pen);
-    // to the right of the Share window, which opened on the join requests
-    r.host_move_to((400.0, -60.0));
-    r.host_button((400.0, -60.0), true);
+    // Below the responsive toolbar and to the left of the Share window.
+    r.host_move_to((400.0, 100.0));
+    r.host_button((400.0, 100.0), true);
     for k in 1..=8 {
-        r.host_move_to((400.0 + 20.0 * f64::from(k), -60.0 + 8.0 * f64::from(k)));
+        r.host_move_to((400.0 + 20.0 * f64::from(k), 100.0 + 8.0 * f64::from(k)));
     }
     r.pump(3);
     for guest in [a, b] {
@@ -314,7 +314,7 @@ fn a_stroke_of_the_host_in_progress_is_seen_by_the_guests_then_replaced_by_the_o
         assert!(s.pts.len() >= 5, "{} points", s.pts.len());
         assert_eq!(pen_objects(&mut r.guests[guest]), 0, "nothing is in their board yet");
     }
-    r.host_button((560.0, 4.0), false);
+    r.host_button((560.0, 164.0), false);
     r.pump(6);
     for guest in [a, b] {
         assert!(r.guests[guest].app().agent.remote.strokes.is_empty(), "the temporary drawing goes away with the object");
@@ -497,7 +497,7 @@ fn follow_moves_the_view_to_the_participants_and_stops_when_the_user_acts() {
     }
     assert!(center_of_view(&mut r.host).dist(target) < 2.0);
     // a click on the board ends it, and the view stays where the user is
-    let p = r.host.at(0.0, 0.0);
+    let p = r.host.app().canvas_rect.center();
     r.host.h.event(Event::PointerMoved(p));
     r.pump(1);
     r.host.h.event(Event::PointerButton { pos: p, button: PointerButton::Primary, pressed: true, modifiers: Modifiers::NONE });

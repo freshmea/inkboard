@@ -3,6 +3,8 @@
 
 /// `(English, French)` pairs.
 pub const FR: &[(&str, &str)] = &[
+    ("Zen mode", "Mode zen"),
+    ("Exit Zen mode", "Quitter le mode zen"),
     ("Apply geometry", "Appliquer la géométrie"),
     ("Connector", "Connecteur"),
     ("Details", "Détails"),

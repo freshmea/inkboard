@@ -43,8 +43,8 @@ impl App {
         let (width, height) = (f64::from(preset.width), f64::from(preset.height));
         let (canvas_w, canvas_h) = (f64::from(self.canvas_size.0), f64::from(self.canvas_size.1));
         // Inserting selects the frame, which opens the style panel even if it was hidden before this click.
-        let left = 300.0;
-        let right = if self.inspector.open { 330.0 } else { 0.0 };
+        let left = if self.zen_mode { 0.0 } else { 300.0 };
+        let right = if self.inspector.open && !self.zen_mode { 330.0 } else { 0.0 };
         let room = (canvas_w - left - right).max(120.0);
         let screen_center = Pt::new(left + room / 2.0, canvas_h / 2.0);
         let center = Pt::new((screen_center.x - view.x) / view.zoom, (screen_center.y - view.y) / view.zoom);
@@ -330,9 +330,33 @@ mod tests {
     }
 
     #[test]
+    fn zen_presets_use_the_full_canvas_even_when_details_were_open() {
+        let mut t = setup();
+        t.app().inspector.open = true;
+        t.key(Key::F4);
+        for _ in 0..3 {
+            t.h.step();
+        }
+        t.h.get_by_label("Frame presets").click();
+        t.h.step();
+        t.h.get_by_label("4K · 3840 × 2160").click();
+        t.h.step();
+        let object = t.objects().remove(0);
+        let camera = cam(&mut t);
+        let bounds = camera.rect_s(object.frame().unwrap().aabb());
+        let canvas = t.app().canvas_rect;
+        assert!(bounds.center().distance(canvas.center()) < 0.01);
+        assert!(canvas.contains_rect(bounds));
+        assert!(canvas.contains_rect(title(&mut t, &object.id).rect));
+        assert!(t.app().zen_mode && t.app().inspector.open);
+        t.key(Key::F4);
+        assert!(!t.app().zen_mode && t.app().inspector.open);
+    }
+
+    #[test]
     fn toolbar_remains_scrollable_on_small_windows() {
         set_for_thread(Some(Lang::En));
-        for width in [390.0, 820.0, 1320.0, 1600.0] {
+        for width in [390.0, 820.0, 900.0, 1024.0, 1320.0, 1360.0, 1600.0] {
             let mut harness = Harness::builder().with_size(vec2(width, 850.0)).build_eframe(|cc| App::build(cc, None, None, false));
             for _ in 0..4 {
                 harness.step();
@@ -343,6 +367,13 @@ mod tests {
             eprintln!("window {width}, toolbar width {}, title right {}", tools.width(), title.right());
             assert!(tools.width() <= width - 16.0, "toolbar {tools:?} in {width}");
             assert!(!tools.intersects(title), "toolbar {tools:?} overlaps title {title:?} in {width}");
+            harness.state_mut().toggle_zen();
+            for _ in 0..4 {
+                harness.step();
+            }
+            let tools = ctx.memory(|memory| memory.area_rect(egui::Id::new("tools"))).unwrap();
+            assert!(tools.left() >= 8.0 && tools.right() <= width - 8.0, "Zen toolbar {tools:?} in {width}");
+            assert!(tools.top() < 20.0 && tools.bottom() < 80.0);
         }
     }
 }
