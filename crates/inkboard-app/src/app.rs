@@ -116,6 +116,8 @@ pub struct App {
     pub keymap: Keymap,
     /// Last pen pressure received (0..1) during a contact, when the hardware provides it.
     pub pen_force: Option<f32>,
+    #[cfg(target_os = "linux")]
+    pub linux_tablet: Option<inkboard_pen::LinuxTablet>,
     /// Reads an image from the system clipboard (replaceable in tests).
     pub system_image: fn() -> Option<RawImage>,
     /// Is the pen used on its eraser end? (via `inkboard-pen`); replaceable in tests.
@@ -248,6 +250,8 @@ impl App {
             icon_bench: None,
             keymap: Keymap::default(),
             pen_force: None,
+            #[cfg(target_os = "linux")]
+            linux_tablet: None,
             system_image: platform::system_image,
             eraser_probe: inkboard_pen::eraser_active,
             pen_test: None,
@@ -1327,6 +1331,13 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let started = Instant::now();
+        #[cfg(target_os = "linux")]
+        if let Some(tablet) = self.linux_tablet.as_mut() {
+            self.pen_force = tablet.poll();
+            if self.pen_force.is_some() {
+                ctx.request_repaint_after(Duration::from_millis(8));
+            }
+        }
         self.sync_fonts(ctx);
         if let Some(p) = self.pending_open.take() {
             self.open_path(&p);

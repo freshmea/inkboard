@@ -32,7 +32,7 @@ mime="$share/mime/packages/inkboard.xml"
 doc="$share/doc/inkboard"
 
 if "$uninstall"; then
-    rm -f -- "$bin/inkboard" "$bin/ink" "$bin/inkboard-mcp" "$desktop" "$icon" "$mime"
+    rm -f -- "$bin/inkboard" "$bin/inkboard-wacom" "$bin/ink" "$bin/inkboard-mcp" "$desktop" "$share/applications/inkboard-wacom.desktop" "$icon" "$mime"
     for file in README.md LICENSE-MIT LICENSE-APACHE THIRD_PARTY_LICENSES.md; do
         rm -f -- "$doc/$file"
     done
@@ -72,6 +72,26 @@ Categories=Graphics;
 MimeType=application/x-inkboard;x-scheme-handler/inkboard;
 EOF
     chmod 644 -- "$desktop"
+    # winit 0.30 does not bind Wayland's tablet protocol; XWayland supplies pointer events.
+    cat > "$bin/inkboard-wacom" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+bin_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+exec /usr/bin/env -u WAYLAND_DISPLAY -u WAYLAND_SOCKET "$bin_dir/inkboard" "$@"
+EOF
+    chmod 755 -- "$bin/inkboard-wacom"
+    cat > "$share/applications/inkboard-wacom.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Inkboard (Wacom)
+Comment=Inkboard through XWayland for tablet input and pen pressure
+Exec=/usr/bin/env "$exe-wacom" %u
+Icon=inkboard
+Terminal=false
+Categories=Graphics;
+StartupWMClass=inkboard
+EOF
+    chmod 644 -- "$share/applications/inkboard-wacom.desktop"
 fi
 
 if command -v update-desktop-database >/dev/null && [[ -d "$share/applications" ]]; then

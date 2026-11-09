@@ -284,6 +284,21 @@ fn launch(l: &Launch, renderer: eframe::Renderer) -> eframe::Result {
                 }
             }
             let mut a = app::App::new(cc, l.open.clone(), l.screenshot.clone());
+            #[cfg(target_os = "linux")]
+            {
+                use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+                let window = cc.window_handle().ok().and_then(|handle| match handle.as_raw() {
+                    RawWindowHandle::Xlib(w) => u32::try_from(w.window).ok(),
+                    RawWindowHandle::Xcb(w) => Some(w.window.get()),
+                    _ => None,
+                });
+                if window.is_some() {
+                    match inkboard_pen::LinuxTablet::connect() {
+                        Ok(tablet) => a.linux_tablet = Some(tablet),
+                        Err(error) => eprintln!("Linux pen pressure unavailable: {error}"),
+                    }
+                }
+            }
             if l.screenshot.is_none() && !l.bench && l.bench_icons.is_none() {
                 // live mode of inkboard-mcp: an agent can drive the displayed board
                 a.live = live::LiveServer::start(cc.egui_ctx.clone(), inkboard_mcp::live::discovery_path()).ok();

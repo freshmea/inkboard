@@ -1,0 +1,3 @@
+# Give the active local user access to Wacom pen events for pressure sampling.
+# Do not grant access to keyboards, mice or tablet pads.
+SUBSYSTEM=="input", KERNEL=="event*", ATTRS{id/vendor}=="056a", ENV{ID_INPUT_TABLET}=="1", ENV{ID_INPUT_TABLET_PAD}!="1", TAG+="uaccess"

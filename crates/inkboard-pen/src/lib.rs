@@ -4,7 +4,7 @@
 //! `WM_POINTER*` messages (`PEN_FLAG_ERASER` / `PEN_FLAG_INVERTED` flags of `POINTER_PEN_INFO`). This crate installs a window *subclass*
 //! that reads these messages without consuming them and remembers the state; the application queries it with [`eraser_active`].
 //!
-//! On other platforms, [`install`] has no effect and [`eraser_active`] always returns `false`.
+//! On Linux, `LinuxTablet` reads live kernel pressure from a Wacom pen, including during pointer grabs.
 //!
 //! **Not validated on real hardware**: the flag-interpretation logic is tested, and installing the *subclass* is tested on a
 //! dummy window, but no physical pen was available.
@@ -25,7 +25,7 @@ pub enum PointerKind {
     Pen,
 }
 
-/// Last pointer sample, as seen by Windows (for pen diagnostics).
+/// Last native pointer sample (for pen diagnostics).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct PenSample {
     pub kind: PointerKind,
@@ -87,6 +87,11 @@ pub fn set_eraser(active: bool) {
 
 #[cfg(windows)]
 mod win;
+
+#[cfg(target_os = "linux")]
+mod linux;
+#[cfg(target_os = "linux")]
+pub use linux::LinuxTablet;
 
 #[cfg(windows)]
 pub use win::install;

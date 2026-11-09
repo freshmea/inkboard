@@ -95,6 +95,11 @@ The script installs to `~/.local`, including the icon, `.inkboard` file type and
 for the command-line tools. Remove it with `./scripts/install-user.sh --uninstall`; saved boards and application data are preserved.
 Use `--prefix /absolute/path` for a different install location (use the same prefix when uninstalling).
 Wayland and X11 are supported. To troubleshoot graphics initialization, try `INKBOARD_RENDERER=wgpu ./target/release/inkboard`.
+For a Wacom tablet, use **Inkboard (Wacom)** in the application menu or `inkboard-wacom`: this launches through XWayland,
+where pointer input works with the current window library. Inkboard reads the kernel's live Wacom pressure state directly,
+including while drawing. Run `sudo ./scripts/setup-wacom-linux.sh` once to grant the active user access to Wacom pen events;
+then restart Inkboard (Wacom). This does not grant access to keyboards or other pointing devices.
+Run `inkboard-wacom --pen-test` to check the native and application pressure values ([guide](docs/STYLET.md)).
 
 ## Features
 

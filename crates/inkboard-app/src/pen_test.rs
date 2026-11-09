@@ -59,7 +59,7 @@ impl PenReport {
     pub fn verdicts(&self) -> Vec<(String, Option<bool>)> {
         let pressed = self.pen_samples > 0;
         vec![
-            ("Pen detected by Windows".into(), Some(pressed)),
+            ("Pen detected by native driver".into(), Some(pressed)),
             ("Variable pressure (several levels)".into(), pressed.then_some(self.levels.len() >= 5)),
             ("Pressure received by the application (egui)".into(), pressed.then_some(self.egui_force_samples > 0)),
             ("Eraser end detected".into(), self.eraser_seen.then_some(true)),
@@ -111,7 +111,7 @@ pub fn panel(report: &mut PenReport, ctx: &egui::Context, egui_force: Option<f32
             PointerKind::None => t("no message received"),
         };
         ui.label(format!("{} {kind}", t("Last pointer:")));
-        ui.add(egui::ProgressBar::new(s.pressure).text(format!("{} {:.2}", t("Windows pressure:"), s.pressure)));
+        ui.add(egui::ProgressBar::new(s.pressure).text(format!("{} {:.2}", t("Native pressure:"), s.pressure)));
         ui.label(format!("{} {}", t("egui pressure (touch force):"), egui_force.map_or("—".to_owned(), |f| format!("{f:.2}"))));
         ui.label(format!("{} {}   {} {}   {} {}°/{}°", t("eraser:"), yes(s.eraser()), t("barrel button:"), yes(s.barrel()), t("tilt:"), s.tilt.0, s.tilt.1));
         ui.separator();
@@ -156,7 +156,7 @@ mod tests {
         r.feed(pen(0.3, PEN_FLAG_BARREL, 100), Some(0.3));
         r.feed(pen(0.3, PEN_FLAG_INVERTED, 101), None);
         let v: std::collections::HashMap<_, _> = r.verdicts().into_iter().collect();
-        assert_eq!(v["Pen detected by Windows"], Some(true));
+        assert_eq!(v["Pen detected by native driver"], Some(true));
         assert_eq!(v["Variable pressure (several levels)"], Some(true));
         assert_eq!(v["Pressure received by the application (egui)"], Some(true));
         assert_eq!(v["Eraser end detected"], Some(true));

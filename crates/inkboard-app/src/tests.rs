@@ -883,6 +883,32 @@ fn pen_pressure_from_touch_events_makes_a_variable_width_stroke() {
 }
 
 #[test]
+fn native_pen_pressure_without_touch_events_reaches_the_stroke() {
+    let mut t = T::new();
+    t.tool(Tool::Pen);
+    let first = t.at(100.0, 100.0);
+    t.app().pen_force = Some(0.15);
+    t.mv(first);
+    t.button(first, true, Modifiers::NONE);
+    for (x, y, force) in [(140.0, 110.0, 0.3), (180.0, 130.0, 0.6), (240.0, 100.0, 0.9)] {
+        t.app().pen_force = Some(force);
+        let point = t.at(x, y);
+        t.mv(point);
+    }
+    let last = t.at(240.0, 100.0);
+    t.button(last, false, Modifiers::NONE);
+    let objects = t.objects();
+    let Kind::Pen(stroke) = &objects[0].kind else { panic!("not a pen stroke") };
+    let pressures = stroke.pressures.as_ref().expect("native pressure must survive the pointer-only path");
+    assert_eq!(pressures.len(), stroke.pts.len());
+    assert!(pressures.iter().any(|p| *p < 0.2) && pressures.iter().any(|p| *p > 0.8));
+    t.app().pen_force = None;
+    t.tool(Tool::Pen);
+    t.drag((100.0, 300.0), (300.0, 300.0));
+    assert!(matches!(&t.objects()[1].kind, Kind::Pen(p) if p.pressures.is_none()), "mouse input must stay pressure-free");
+}
+
+#[test]
 fn mouse_strokes_have_constant_width_and_highlighter_ignores_pressure() {
     let mut t = T::new();
     t.tool(Tool::Pen);

@@ -57,7 +57,7 @@ path = "inkboard-mcp"
 [deb]
 depends = ["libgl1", "libxkbcommon0", "libxkbcommon-x11-0"]
 # declares the application/x-inkboard type (the desktop file only lists it): maps *.inkboard to it
-files = { "packaging/linux/inkboard.xml" = "usr/share/mime/packages/inkboard.xml" }
+files = { "packaging/linux/inkboard.xml" = "usr/share/mime/packages/inkboard.xml", "packaging/linux/69-inkboard-wacom.rules" = "usr/lib/udev/rules.d/69-inkboard-wacom.rules" }
 
 # macOS (untested: no Mac was available during development).
 [macos]
