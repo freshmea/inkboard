@@ -64,6 +64,16 @@ The installers also provide the `ink` command-line tool and the `inkboard-mcp` s
 
 You need [Rust](https://rustup.rs) 1.91 or newer.
 
+On Ubuntu / Debian, install the build tools and graphics libraries first:
+
+```bash
+sudo apt update
+sudo apt install build-essential pkg-config libxkbcommon-dev libwayland-dev libgl1 libegl1 libxkbcommon-x11-0
+```
+
+File dialogs use an XDG desktop portal. GNOME and KDE normally provide one; on a minimal desktop, install
+`xdg-desktop-portal` and a backend for your desktop (for example `xdg-desktop-portal-gtk`).
+
 ```bash
 git clone https://github.com/VictorLetirand/inkboard.git
 cd inkboard
@@ -72,6 +82,19 @@ cargo run --release -p inkboard-app -- diagram.drawio  # …or open a file direc
 ```
 
 To build the installers yourself: `cargo install cargo-packager --locked`, then `cargo packager --release -c Packager.toml` ([details](docs/DISTRIBUTION.md)).
+
+On Linux, build all three executables and optionally install them for your user (no administrator rights):
+
+```bash
+cargo build --locked --release -p inkboard-app -p inkboard-cli -p inkboard-mcp
+./scripts/install-user.sh
+```
+
+Run `./target/release/inkboard` directly, or launch Inkboard from the application menu after installation.
+The script installs to `~/.local`, including the icon, `.inkboard` file type and `inkboard://` handler. Add `~/.local/bin` to your `PATH`
+for the command-line tools. Remove it with `./scripts/install-user.sh --uninstall`; saved boards and application data are preserved.
+Use `--prefix /absolute/path` for a different install location (use the same prefix when uninstalling).
+Wayland and X11 are supported. To troubleshoot graphics initialization, try `INKBOARD_RENDERER=wgpu ./target/release/inkboard`.
 
 ## Features
 
