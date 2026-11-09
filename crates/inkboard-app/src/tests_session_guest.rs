@@ -891,6 +891,18 @@ fn an_inkboard_link_on_the_command_line_opens_the_join_window_not_a_file() {
 }
 
 #[test]
+fn desktop_file_urls_open_the_decoded_local_path() {
+    let root = std::env::temp_dir();
+    let path = root.join("Inkboard 한글 #1 100%.inkboard");
+    let uri = url::Url::from_file_path(&path).expect("absolute local path");
+    let l = crate::parse_args(&[uri.to_string()]);
+    assert_eq!(l.open.as_ref(), Some(&path));
+    assert!(l.join.is_none());
+    let plain = "relative board #1 100%.inkboard";
+    assert_eq!(crate::parse_args(&[plain.to_owned()]).open, Some(std::path::PathBuf::from(plain)));
+}
+
+#[test]
 fn a_link_on_the_command_line_hides_every_other_argument_from_the_option_parser() {
     let args = |v: &[&str]| v.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
     let l = crate::parse_args(&args(&["inkboard://join#x", "--screenshot", "y"]));

@@ -23,6 +23,21 @@ The installer installs the application, the `ink` conversion CLI and the `inkboa
 cargo build --release -p inkboard-app -p inkboard-cli -p inkboard-mcp
 ```
 
+### Linux source installation
+
+See the [source build prerequisites](../README.md#build-from-source) for Ubuntu / Debian packages. Build all three binaries with the command above,
+then run `./scripts/install-user.sh`. This installs to `~/.local/bin` and `~/.local/share` without root, registers a desktop launcher, icon,
+the `.inkboard` MIME type and the `inkboard://` protocol handler, and refreshes desktop caches when the relevant tools are available.
+The launcher accepts a single file or URL; local `file://` URLs are decoded before opening the board.
+No default application is changed. `./scripts/install-user.sh --uninstall` removes these files while preserving boards and the data folder
+(`$XDG_DATA_HOME/Inkboard`, or `~/.local/share/Inkboard`). An optional `--prefix /absolute/path` applies to both installation and removal;
+custom prefixes need their `bin` in `PATH` and `share` in `XDG_DATA_DIRS` to be discovered by the desktop.
+
+For a native package instead, install `cargo-packager` and run `cargo packager --release -c Packager.toml --formats deb` after the build.
+The AppImage additionally needs the library/permission repair performed by `.github/workflows/release.yml`.
+
+### Windows source installation
+
 The Windows `.exe` needs a Windows Docker host (Windows containers): copy `target/release/{inkboard,ink,inkboard-mcp}.exe`, `README.md`, `LICENSE-MIT`, `LICENSE-APACHE` and `THIRD_PARTY_LICENSES.md` to `dist/installway/`, then:
 
 ```powershell

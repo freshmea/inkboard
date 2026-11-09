@@ -53,12 +53,37 @@ fn read_system_font(file: &str) -> Option<Vec<u8>> {
     dirs.iter().find_map(|d| std::fs::read(std::path::Path::new(d).join(file)).ok())
 }
 
-/// Native Windows fallback for characters absent from the Latin-only bundled fonts.
-/// Load from the OS; do not redistribute Microsoft's font files.
-fn add_korean_fallback(defs: &mut FontDefinitions) {
+/// Load Korean glyphs from the OS, without redistributing system fonts.
+fn korean_fallback() -> Option<FontData> {
     if let Some(bytes) = read_system_font("malgun.ttf") {
+        return Some(FontData::from_owned(bytes));
+    }
+    #[cfg(target_os = "linux")]
+    {
+        if cfg!(test) && std::env::var_os("INKBOARD_NO_SYSTEM_FONTS").is_some() {
+            return None;
+        }
+        // Noto CJK collections contain the Korean face at index 1. Debian/Ubuntu, Fedora and Arch paths.
+        for (path, index) in [
+            ("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", 1),
+            ("/usr/share/fonts/google-noto-cjk/NotoSansCJK-Regular.ttc", 1),
+            ("/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc", 1),
+            ("/usr/share/fonts/truetype/nanum/NanumGothic.ttf", 0),
+        ] {
+            if let Ok(bytes) = std::fs::read(path) {
+                let mut data = FontData::from_owned(bytes);
+                data.index = index;
+                return Some(data);
+            }
+        }
+    }
+    None
+}
+
+fn add_korean_fallback(defs: &mut FontDefinitions) {
+    if let Some(data) = korean_fallback() {
         let key = "korean-fallback";
-        defs.font_data.insert(key.to_owned(), Arc::new(FontData::from_owned(bytes)));
+        defs.font_data.insert(key.to_owned(), Arc::new(data));
         for chain in defs.families.values_mut() {
             chain.push(key.to_owned());
         }
@@ -149,12 +174,17 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn korean_glyphs_exist_in_every_board_style() {
         if std::env::var_os("INKBOARD_NO_SYSTEM_FONTS").is_some() {
             return;
         }
-        assert!(read_system_font("malgun.ttf").is_some(), "Windows Korean font required");
+        #[cfg(target_os = "windows")]
+        assert!(korean_fallback().is_some(), "Windows Korean font required");
+        #[cfg(target_os = "linux")]
+        if korean_fallback().is_none() {
+            return; // Optional system fonts are not installed on every CI runner.
+        }
         for embedded in [false, true] {
             let ctx = context(embedded);
             for family in FAMILIES {

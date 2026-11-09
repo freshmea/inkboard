@@ -162,7 +162,13 @@ fn parse_args(args: &[String]) -> Launch {
                     l.bad_link = true;
                 }
             }
-            other => l.open = Some(PathBuf::from(other)),
+            // Linux desktop launchers use %U when file associations and invitation links coexist.
+            // Decode file URLs before passing them to the filesystem (including spaces and non-ASCII names).
+            other => {
+                l.open = Some(
+                    url::Url::parse(other).ok().filter(|u| u.scheme() == "file").and_then(|u| u.to_file_path().ok()).unwrap_or_else(|| PathBuf::from(other)),
+                );
+            }
         }
     }
     l
@@ -251,6 +257,11 @@ fn launch(l: &Launch, renderer: eframe::Renderer) -> eframe::Result {
         renderer,
         viewport: {
             let mut v = egui::ViewportBuilder::default().with_inner_size([1360.0, 860.0]).with_min_inner_size([720.0, 480.0]).with_title("Inkboard");
+            // Match inkboard.desktop so Wayland can associate the window with its launcher and icon.
+            #[cfg(target_os = "linux")]
+            {
+                v = v.with_app_id("inkboard");
+            }
             if let Ok(icon) = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")) {
                 v = v.with_icon(icon);
             }
